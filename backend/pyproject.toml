@@ -1,0 +1,20 @@
+[tool.poetry]
+name = "govdocs"
+version = "0.1.0"
+description = "govdocs OCR and LLM evaluation apis."
+authors = ["Furquan Hassan"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+fastapi = {extras = ["standard"], version = "^0.115.8"}
+pytesseract = "^0.3.13"
+transformers = "^4.49.0"
+huggingface-hub = "^0.29.1"
+redis-om = "^0.3.3"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
