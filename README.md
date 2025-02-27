@@ -1,2 +1,2 @@
 # govdocs
-monorepo for the govdocs project.
+Backend APIs for the govdocs project 
