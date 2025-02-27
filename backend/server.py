@@ -67,8 +67,8 @@ def get_image_path(image_id: str) -> str:
 # Models for request validation
 class OCRRequest(BaseModel):
     image_path: str
-    lang: Optional[str] = "eng"  # For PyTesseract
-    config: Optional[str] = ""   # For PyTesseract
+    lang: Optional[str] = "eng" 
+    config: Optional[str] = ""   
 
 class GOTOCRRequest(BaseModel):
     image_path: str
