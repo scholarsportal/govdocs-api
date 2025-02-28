@@ -14,8 +14,8 @@ transformers = "^4.49.0"
 huggingface-hub = "^0.29.1"
 pydantic = "^2.10.6"
 redis-om = "^0.3.3"
-gunicorn = "21.2.0"
 uvicorn = {version = "0.34.0", extras = ["standard"]}
+gunicorn = "22.0.0"
 
 
 [build-system]
