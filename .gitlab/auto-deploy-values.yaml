@@ -1,0 +1,18 @@
+service:
+  externalPort: 8000
+  internalPort: 8000
+livenessProbe:
+  path: '/healthz'
+  initialDelaySeconds: 10
+  timeoutSeconds: 5
+readinessProbe:
+  path: '/healthz'
+  initialDelaySeconds: 10
+  timeoutSeconds: 5
+ingress:
+  annotations:
+    nginx.ingress.kubernetes.io/enable-cors: 'true'
+    nginx.ingress.kubernetes.io/proxy-body-size: 2m
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"

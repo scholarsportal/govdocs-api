@@ -9,6 +9,7 @@
     "gecos",
     "govdocs",
     "gunicorn",
+    "healthz",
     "huggingface",
     "OCUL",
     "pycache",

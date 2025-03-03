@@ -1,0 +1,25 @@
+# Use Auto DevOps pipeline
+# https://gitlab.com/gitlab-org/gitlab/blob/master/lib/gitlab/ci/templates/Auto-DevOps.gitlab-ci.yml
+include:
+- template: Auto-DevOps.gitlab-ci.yml
+
+variables:
+  # disable some auto devops tests
+  BROWSER_PERFORMANCE_DISABLED: 1
+  CODE_INTELLIGENCE_DISABLED: 1
+  CODE_QUALITY_DISABLED: 1
+  CONTAINER_SCANNING_DISABLED: 1
+  DAST_DISABLED: 1
+  DEPENDENCY_SCANNING_DISABLED: 1
+  SAST_DISABLED: 1
+  LICENSE_MANAGEMENT_DISABLED: 1
+  LOAD_PERFORMANCE_DISABLED: 1
+  PERFORMANCE_DISABLED: 1
+  SECRET_DETECTION_DISABLED: 1
+  TEST_DISABLED: 1
+
+  # configure auto devops components
+  POSTGRES_ENABLED: 'false'
+  REVIEW_DISABLED: 1
+  STAGING_ENABLED: 0
+  PRODUCTION_ENABLED: 0
