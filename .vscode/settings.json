@@ -1,0 +1,23 @@
+{
+  "cSpell.words": [
+    "adduser",
+    "AIML",
+    "appuser",
+    "Dolma",
+    "dolmaviewer",
+    "fastapi",
+    "gecos",
+    "govdocs",
+    "gunicorn",
+    "huggingface",
+    "OCUL",
+    "pycache",
+    "pydantic",
+    "pytesseract",
+    "pytest",
+    "tesseract",
+    "uvicorn",
+    "venv",
+    "virtualenvs"
+  ]
+}

@@ -1,10 +1,7 @@
-version: '3.4'
-
 services:
-  govdocsapi:
-    image: govdocsapi
+  govdocs-api:
+    image: govdocs-api
     build:
       context: .
-      dockerfile: ./backend/Dockerfile
     ports:
       - 8000:8000

@@ -1,0 +1,23 @@
+__pycache__/
+
+# Distribution / packaging
+.Python
+build/
+dist/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+.cache
+.pytest_cache/
+
+# Environments
+.env
+.venv
+env/
+venv/

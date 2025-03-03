@@ -1,13 +1,13 @@
 [tool.poetry]
-name = "govdocs"
+name = "govdocs-api"
 version = "0.1.0"
-description = "govdocs OCR and LLM evaluation apis."
+description = "Govdocs OCR and LLM evaluation api"
 authors = ["Furquan Hassan"]
 license = "MIT"
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.12"
+python = "<4.0,>=3.10"
 fastapi = {extras = ["standard"], version = "^0.115.8"}
 pytesseract = "^0.3.13"
 transformers = "^4.49.0"
@@ -16,7 +16,6 @@ pydantic = "^2.10.6"
 redis-om = "^0.3.3"
 uvicorn = {version = "0.34.0", extras = ["standard"]}
 gunicorn = "23.0.0"
-
 
 [build-system]
 requires = ["poetry-core"]
