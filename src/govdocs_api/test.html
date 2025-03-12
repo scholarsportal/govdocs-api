@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF to PNG</title>
+</head>
+<body>
+    <h1>PDF to PNG</h1>
+    <img id="pdf-image" alt="PDF Page as PNG">
+    <script>
+        async function fetchImage() {
+            const response = await fetch('http://localhost:8000/olmocr/pdf-to-png?filename=historical_table_example.pdf&page_num=5');
+            const data = await response.json();
+            const imageElement = document.getElementById('pdf-image');
+            imageElement.src = `data:image/png;base64,${data.image}`;
+        }
+
+        fetchImage();
+    </script>
+</body>
+</html>

@@ -22,7 +22,23 @@ cd govdocs-api
 
 ### Run locally
 
-### Install poetry 
+#### Install dependencies 
+
+Ubuntu/Debian:
+```bash
+sudo apt-get update
+sudo apt-get install poppler-utils ttf-mscorefonts-installer msttcorefonts fonts-crosextra-caladea fonts-crosextra-carlito gsfonts lcdf-typetools
+```
+Windows:
+
+Download the poppler windows poppler-windows package instead: 
+
+https://github.com/oschwartz10612/poppler-windows/releases/tag/v24.08.0-0 
+
+1. Download the Release-24.08.0-0.zip file.
+2. extract the file at C:\poppler\
+
+#### Install poetry 
 
 Poetry is a tool for dependency management and packaging in Python.
 
@@ -35,10 +51,11 @@ curl -sSL https://install.python-poetry.org | python3 -
 Windows (Powershell)
 ```bash
 (Invoke-WebRequest -Uri https://install.python-poetry.org -UseBasicParsing).Content | py -
+# Follow instruction on adding poetry to Path
 ```
 If you have installed Python through the Microsoft Store, replace py with python in the command above.
 
-### Install required packages
+##### Install required packages
 ```bash
 poetry config virtualenvs.in-project true # Allow poetry to create a virual env within project directory
 poetry install

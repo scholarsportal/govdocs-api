@@ -5,7 +5,20 @@ from pydantic import BaseModel
 from typing import Optional, List
 import json
 from redis_om import get_redis_connection
+import os
 
+import torch
+import base64
+import urllib.request
+import pytesseract
+
+from io import BytesIO
+from PIL import Image
+from transformers import AutoProcessor, Qwen2VLForConditionalGeneration, AutoModelForImageTextToText
+
+from olmocr.data.renderpdf import render_pdf_to_base64png
+from olmocr.prompts import build_finetuning_prompt
+from olmocr.prompts.anchor import get_anchor_text
 
 app = FastAPI()
 
@@ -17,6 +30,28 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+
+@app.get("/olmocr/pdf-to-png")
+async def pdf_to_png(filename: str, page_num :Optional[int] = 1):
+  try:
+    # Add debugging to check actual paths
+    print(f"Current working directory: {os.getcwd()}")
+    path = os.path.join(".", "pdfs", filename)
+    print(f"Attempting to access: {path}")
+    print(f"File exists: {os.path.exists(path)}")
+    print(f"Rendering PDF: {filename}, page: {page_num}")
+    # Render the PDF to a PNG image
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    print(f"Script directory: {script_dir}")
+    pdf_path = os.path.join(script_dir, "pdfs", filename)
+    print(f"PDF path: {pdf_path}")
+    print(f"File path exists: {os.path.exists(pdf_path)}")
+    print("============")
+    image = render_pdf_to_base64png(local_pdf_path=pdf_path, page_num=page_num, target_longest_image_dim=1024)
+    return JSONResponse(content={"image": image}, status_code=200)
+  except Exception as e:
+    raise HTTPException(status_code=500, detail="Error rendering PDF: " + str(e) )
 
 @app.get("/")
 async def root():
@@ -259,3 +294,7 @@ async def got_ocr_batch(request: List[GOTOCRRequest], background_tasks: Backgrou
   except Exception as e:
     raise HTTPException(
         status_code=500, detail=f"Error processing batch: {str(e)}")
+
+if __name__ == "__main__":
+  import uvicorn
+  uvicorn.run(app, host="0.0.0.0", port=8000)
