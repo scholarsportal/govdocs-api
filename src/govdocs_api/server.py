@@ -53,10 +53,28 @@ def get_cached_result(key: str) -> Optional[str]:
 
 def set_cached_result(key: str, result: str, expire_time: int = 60000) -> None:
   """Store the result in the Redis cache with the given expiration key."""
-  redis_client.setex(key, ttl, result)
+  redis_client.setex(key, expire_time, result)
+
+## Testing redis (delete later)
+@app.get("/set_name")
+async def set_last_name(first_name: str, last_name: str):
+  redis_client.setex(f"{first_name}", 60, last_name)
+  redis_client.setex(f"{last_name}", 60, first_name)
+  return JSONResponse(content={"message": f"{first_name} {last_name} set successfully"})
+
+@app.get("/last_name")
+async def get_last_name(first_name: str):
+  last_name = redis_client.get(first_name)
+  return JSONResponse(content={"first_name": first_name, "last_name": last_name})
+
+@app.get("/first_name")
+async def get_first_name(last_name: str):
+  first_name = redis_client.get(last_name)
+  return JSONResponse(content={"first_name": first_name, "last_name": last_name})
+##
+
 
 # Helper functions
-
 
 def get_image_path(image_id: str) -> str:
   """
