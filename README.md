@@ -22,10 +22,28 @@ cd govdocs-api
 
 ### Run locally
 
+### Install poetry 
+
+Poetry is a tool for dependency management and packaging in Python.
+
+Follow installation instructions at: https://python-poetry.org/docs/#installing-with-the-official-installer
+
+Linux, macOS, Windows (WSL)
 ```bash
-pip install poetry
+curl -sSL https://install.python-poetry.org | python3 -
+```
+Windows (Powershell)
+```bash
+(Invoke-WebRequest -Uri https://install.python-poetry.org -UseBasicParsing).Content | py -
+```
+If you have installed Python through the Microsoft Store, replace py with python in the command above.
+
+### Install required packages
+```bash
+poetry config virtualenvs.in-project true # Allow poetry to create a virual env within project directory
 poetry install
-poetry run uvicorn src.govdocs_api.server:app --reload
+poetry run fastapi dev src/govdocs_api/server.py # run the api server in development mode
+poetry run fastapi run src/govdocs_api/server.py # run the api server in production mode
 ```
 
 ### Run with Docker
