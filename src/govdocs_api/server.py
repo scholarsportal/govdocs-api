@@ -16,9 +16,13 @@ from io import BytesIO
 from PIL import Image
 from transformers import AutoProcessor, Qwen2VLForConditionalGeneration, AutoModelForImageTextToText
 
-from olmocr.data.renderpdf import render_pdf_to_base64png
+from govdocs_api.utilities.caching import cache_key, get_cached_result, set_cached_result
+
+from govdocs_api.utilities.pdf_utilities import render_pdf_to_base64png
 from olmocr.prompts import build_finetuning_prompt
 from olmocr.prompts.anchor import get_anchor_text
+
+from govdocs_api.models.tesseract import tesseract
 
 app = FastAPI()
 
@@ -30,24 +34,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(tesseract)
+
 
 
 @app.get("/olmocr/pdf-to-png")
 async def pdf_to_png(filename: str, page_num :Optional[int] = 1):
   try:
-    # Add debugging to check actual paths
-    print(f"Current working directory: {os.getcwd()}")
-    path = os.path.join(".", "pdfs", filename)
-    print(f"Attempting to access: {path}")
-    print(f"File exists: {os.path.exists(path)}")
-    print(f"Rendering PDF: {filename}, page: {page_num}")
-    # Render the PDF to a PNG image
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    print(f"Script directory: {script_dir}")
     pdf_path = os.path.join(script_dir, "pdfs", filename)
-    print(f"PDF path: {pdf_path}")
-    print(f"File path exists: {os.path.exists(pdf_path)}")
-    print("============")
     image = render_pdf_to_base64png(local_pdf_path=pdf_path, page_num=page_num, target_longest_image_dim=1024)
     return JSONResponse(content={"image": image}, status_code=200)
   except Exception as e:
@@ -66,47 +61,47 @@ async def health_check():
 got_ocr_model = None
 got_ocr_processor = None
 
-# Redis caching using redis-om
+# # Redis caching using redis-om
 
-redis_client = get_redis_connection(
-    host='localhost',
-    port=6379,
-    decode_responses=True
-)
-
-
-def cache_key(model: str, image_path: str, **kwargs) -> str:
-  """Generate a unique cache key for the given model and image path."""
-  params = json.dumps(kwargs, sort_keys=True)
-  return f"{model}:{image_path}:{params}"
+# redis_client = get_redis_connection(
+#     host='localhost',
+#     port=6379,
+#     decode_responses=True
+# )
 
 
-def get_cached_result(key: str) -> Optional[str]:
-  """Get the cached result for the given key."""
-  return redis_client.get(key)
+# def cache_key(model: str, image_path: str, **kwargs) -> str:
+#   """Generate a unique cache key for the given model and image path."""
+#   params = json.dumps(kwargs, sort_keys=True)
+#   return f"{model}:{image_path}:{params}"
 
 
-def set_cached_result(key: str, result: str, expire_time: int = 60000) -> None:
-  """Store the result in the Redis cache with the given expiration key."""
-  redis_client.setex(key, expire_time, result)
+# def get_cached_result(key: str) -> Optional[str]:
+#   """Get the cached result for the given key."""
+#   return redis_client.get(key)
+
+
+# def set_cached_result(key: str, result: str, expire_time: int = 60000) -> None:
+#   """Store the result in the Redis cache with the given expiration key."""
+#   redis_client.setex(key, expire_time, result)
 
 ## Testing redis (delete later)
-@app.get("/set_name")
-async def set_last_name(first_name: str, last_name: str):
-  redis_client.setex(f"{first_name}", 60, last_name)
-  redis_client.setex(f"{last_name}", 60, first_name)
-  return JSONResponse(content={"message": f"{first_name} {last_name} set successfully"})
+# @app.get("/set_name")
+# async def set_last_name(first_name: str, last_name: str):
+#   redis_client.setex(f"{first_name}", 60, last_name)
+#   redis_client.setex(f"{last_name}", 60, first_name)
+#   return JSONResponse(content={"message": f"{first_name} {last_name} set successfully"})
 
-@app.get("/last_name")
-async def get_last_name(first_name: str):
-  last_name = redis_client.get(first_name)
-  return JSONResponse(content={"first_name": first_name, "last_name": last_name})
+# @app.get("/last_name")
+# async def get_last_name(first_name: str):
+#   last_name = redis_client.get(first_name)
+#   return JSONResponse(content={"first_name": first_name, "last_name": last_name})
 
-@app.get("/first_name")
-async def get_first_name(last_name: str):
-  first_name = redis_client.get(last_name)
-  return JSONResponse(content={"first_name": first_name, "last_name": last_name})
-##
+# @app.get("/first_name")
+# async def get_first_name(last_name: str):
+#   first_name = redis_client.get(last_name)
+#   return JSONResponse(content={"first_name": first_name, "last_name": last_name})
+# ##
 
 
 # Helper functions
@@ -170,7 +165,7 @@ async def pytesseract_ocr(request: OCRRequest):
 
   # Return the cached result if available
   if cached_result:
-    return JSONResponse(content={"text": cached_result, cached: True}, status_code=200)
+    return JSONResponse(content={"text": cached_result, "cached": True}, status_code=200)
 
   # Perform OCR
   try:
@@ -181,7 +176,7 @@ async def pytesseract_ocr(request: OCRRequest):
     )
 
     set_cached_result(key, text)
-    return JSONResponse(content={"text": text, cached: False}, status_code=200)
+    return JSONResponse(content={"text": text, "cached": False}, status_code=200)
   except Exception as e:
     raise HTTPException(
         status_code=500, detail="Error processing image: " + str(e))
@@ -224,8 +219,8 @@ async def got_ocr(request: GOTOCRRequest):
       # Handle single image case
       image = Image.open(image_path)
       processor_kwargs = {
-          return_tensors: "pt",
-          format: request.format,
+          "return_tensors": "pt",
+          "format": request.format,
       }
 
       # Add additional parameters if provided
@@ -255,7 +250,7 @@ async def got_ocr(request: GOTOCRRequest):
     # Cache the result
     set_cached_result(key, text)
 
-    return JSONResponse(content={"text": text, cached: True}, status_code=200)
+    return JSONResponse(content={"text": text, "cached": True}, status_code=200)
 
   except Exception as e:
     raise HTTPException(

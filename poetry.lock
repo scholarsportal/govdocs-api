@@ -41,7 +41,7 @@ description = "Timeout context manager for asyncio programs"
 optional = false
 python-versions = ">=3.8"
 groups = ["main"]
-markers = "python_full_version < \"3.11.3\""
+markers = "python_version == \"3.11\" and python_full_version < \"3.11.3\""
 files = [
     {file = "async_timeout-5.0.1-py3-none-any.whl", hash = "sha256:39e3809566ff85354557ec2398b55e096c8364bacac9405a7a1fa429e77fe76c"},
     {file = "async_timeout-5.0.1.tar.gz", hash = "sha256:d9321a7a3d5a6a5e187e824d2fa0793ce379a202935782d555d6e9d2735677d3"},
@@ -1690,6 +1690,29 @@ dev = ["Sphinx (>=4.3.0,<7.1.0)", "black", "build", "datasets", "furo (==2023.7.
 train = ["accelerate", "datasets", "einops", "necessary", "omegaconf", "peft", "s3fs", "torch", "torchvision", "transformers (>=4.45.1)", "wandb"]
 
 [[package]]
+name = "opencv-python"
+version = "4.11.0.86"
+description = "Wrapper package for OpenCV python bindings."
+optional = false
+python-versions = ">=3.6"
+groups = ["main"]
+files = [
+    {file = "opencv-python-4.11.0.86.tar.gz", hash = "sha256:03d60ccae62304860d232272e4a4fda93c39d595780cb40b161b310244b736a4"},
+    {file = "opencv_python-4.11.0.86-cp37-abi3-macosx_13_0_arm64.whl", hash = "sha256:432f67c223f1dc2824f5e73cdfcd9db0efc8710647d4e813012195dc9122a52a"},
+    {file = "opencv_python-4.11.0.86-cp37-abi3-macosx_13_0_x86_64.whl", hash = "sha256:9d05ef13d23fe97f575153558653e2d6e87103995d54e6a35db3f282fe1f9c66"},
+    {file = "opencv_python-4.11.0.86-cp37-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:1b92ae2c8852208817e6776ba1ea0d6b1e0a1b5431e971a2a0ddd2a8cc398202"},
+    {file = "opencv_python-4.11.0.86-cp37-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:6b02611523803495003bd87362db3e1d2a0454a6a63025dc6658a9830570aa0d"},
+    {file = "opencv_python-4.11.0.86-cp37-abi3-win32.whl", hash = "sha256:810549cb2a4aedaa84ad9a1c92fbfdfc14090e2749cedf2c1589ad8359aa169b"},
+    {file = "opencv_python-4.11.0.86-cp37-abi3-win_amd64.whl", hash = "sha256:085ad9b77c18853ea66283e98affefe2de8cc4c1f43eda4c100cf9b2721142ec"},
+]
+
+[package.dependencies]
+numpy = [
+    {version = ">=1.26.0", markers = "python_version >= \"3.12\""},
+    {version = ">=1.23.5", markers = "python_version == \"3.11\""},
+]
+
+[[package]]
 name = "orjson"
 version = "3.10.15"
 description = "Fast, correct Python JSON library supporting dataclasses, datetimes, and numpy"
@@ -1789,6 +1812,38 @@ files = [
     {file = "packaging-24.2-py3-none-any.whl", hash = "sha256:09abb1bccd265c01f4a3aa3f7a7db064b36514d2cba19a2f694fe6150451a759"},
     {file = "packaging-24.2.tar.gz", hash = "sha256:c228a6dc5e932d346bc5739379109d49e8853dd8223571c7c5b55260edc0b97f"},
 ]
+
+[[package]]
+name = "pdf2image"
+version = "1.17.0"
+description = "A wrapper around the pdftoppm and pdftocairo command line tools to convert PDF to a PIL Image list."
+optional = false
+python-versions = "*"
+groups = ["main"]
+files = [
+    {file = "pdf2image-1.17.0-py3-none-any.whl", hash = "sha256:ecdd58d7afb810dffe21ef2b1bbc057ef434dabbac6c33778a38a3f7744a27e2"},
+    {file = "pdf2image-1.17.0.tar.gz", hash = "sha256:eaa959bc116b420dd7ec415fcae49b98100dda3dd18cd2fdfa86d09f112f6d57"},
+]
+
+[package.dependencies]
+pillow = "*"
+
+[[package]]
+name = "pika"
+version = "1.3.2"
+description = "Pika Python AMQP Client Library"
+optional = false
+python-versions = ">=3.7"
+groups = ["main"]
+files = [
+    {file = "pika-1.3.2-py3-none-any.whl", hash = "sha256:0779a7c1fafd805672796085560d290213a465e4f6f76a6fb19e378d8041a14f"},
+    {file = "pika-1.3.2.tar.gz", hash = "sha256:b2a327ddddf8570b4965b3576ac77091b850262d34ce8c1d8cb4e4146aa4145f"},
+]
+
+[package.extras]
+gevent = ["gevent"]
+tornado = ["tornado"]
+twisted = ["twisted"]
 
 [[package]]
 name = "pillow"
@@ -2125,6 +2180,25 @@ dev = ["black", "flit", "pip-tools", "pre-commit (<2.18.0)", "pytest-cov", "pyte
 docs = ["myst_parser", "sphinx", "sphinx_rtd_theme"]
 full = ["Pillow (>=8.0.0)", "cryptography"]
 image = ["Pillow (>=8.0.0)"]
+
+[[package]]
+name = "pypdf2"
+version = "3.0.1"
+description = "A pure-python PDF library capable of splitting, merging, cropping, and transforming PDF files"
+optional = false
+python-versions = ">=3.6"
+groups = ["main"]
+files = [
+    {file = "PyPDF2-3.0.1.tar.gz", hash = "sha256:a74408f69ba6271f71b9352ef4ed03dc53a31aa404d29b5d31f53bfecfee1440"},
+    {file = "pypdf2-3.0.1-py3-none-any.whl", hash = "sha256:d16e4205cfee272fbdc0568b68d82be796540b1537508cef59388f839c191928"},
+]
+
+[package.extras]
+crypto = ["PyCryptodome"]
+dev = ["black", "flit", "pip-tools", "pre-commit (<2.18.0)", "pytest-cov", "wheel"]
+docs = ["myst_parser", "sphinx", "sphinx_rtd_theme"]
+full = ["Pillow", "PyCryptodome"]
+image = ["Pillow"]
 
 [[package]]
 name = "pypdfium2"
@@ -3485,4 +3559,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.1"
 python-versions = "<4.0,>=3.11"
-content-hash = "a0e10a7f3ca7a690ff5d15a92d7cf911a6cf459ba6543f61b1627b710b9af8e0"
+content-hash = "5000f6924d86c89b6cbb211d87b05c782c5f4921f213422624b7ceb86fe94e04"

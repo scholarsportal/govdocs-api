@@ -13,14 +13,18 @@ services:
               count: 1
               capabilities: [gpu]
 
-  redis:
-    image: redis/redis-stack-server:latest
+  rabbitmq:
+    image: rabbitmq:4.0-management
+    container_name: rabbitmq
     ports:
-      - 6379:6379
-    healthcheck:
-      test: [ "CMD", "redis-cli", "--raw", "incr", "ping" ]
+      - 5672:5672
+      - 15672:15672
     volumes:
-      - redis-data:/data
+      - rabbitmq_data:/var/lib/rabbitmq
+    environment:
+      - RABBITMQ_DEFAULT_USER=user
+      - RABBITMQ_DEFAULT_PASS=password
+  
 
 volumes:
-  redis-data:
+  rabbitmq_data:
