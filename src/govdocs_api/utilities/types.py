@@ -5,6 +5,10 @@ class TesseactOCRRequest(BaseModel):
   pdf_path: str
   config: Optional[str] = ""
 
+class MarkerOCRRequest(BaseModel):
+  pdf_path: str
+  config: Optional[str] = ""
+
 class GOTOCRRequest(BaseModel):
   pdf_path: str
   temprature: int
