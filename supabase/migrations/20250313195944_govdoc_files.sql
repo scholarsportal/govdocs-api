@@ -1,5 +1,5 @@
 create table if not exists documents (
-  id uuid primary key default gen_uuid_v4(),
+  id uuid primary key default uuid_generate_v4(),
   title text not null,
   ia_link text not null,
   barcode bigint not null,
@@ -8,11 +8,11 @@ create table if not exists documents (
 
 create index if not exists idx_documents_barcode on documents(barcode);
 
-create enum if not exists ocr_status as ('pending', 'processing', 'completed', 'error');
-create enum if not exists ocr_model as ('tesseract', 'marker', 'gotocr', 'olmocr');
+create type ocr_status as enum ('pending', 'processing', 'completed', 'error');
+create type ocr_model as enum ('tesseract', 'marker', 'gotocr', 'olmocr');
 
 create table if not exists ocr_jobs (
-  id bigseral primary key,
+  id bigserial primary key,
   document_id uuid references documents(id) not null,
   page_number integer not null,
   ocr_output text not null,
