@@ -27,7 +27,7 @@ def olm_ocr(pdf_path, output_dir):
     model.to(device)
     
     # Get the number of pages in the PDF
-    from PyPDF2 import PdfReader
+    from pypdf import PdfReader
     pdf = PdfReader(pdf_path)
     num_pages = len(pdf.pages)
     
