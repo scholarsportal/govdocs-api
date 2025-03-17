@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 from govdocs_api.utilities.types import TesseactOCRRequest
 import json
@@ -8,24 +8,62 @@ import pytesseract
 import os
 import platform
 import numpy as np
-from govdocs_api.utilities.pdf_utilities import convert_pdf_to_images
+from govdocs_api.utilities.pdf_utilities import convert_pdf_to_images, render_pdf_to_base64png
+import logging
+
+import base64
+from io import BytesIO
+from PIL import Image
+
+# base64 to Pillow
+def base64_to_pil(base64_str):
+  pil_img = base64.b64decode(base64_str)
+  pil_img = BytesIO(pil_img)
+  pil_img = Image.open(pil_img)
+  return pil_img
 
 tesseract = APIRouter()
 
-
-
-
-
-def tesseract_ocr(pdf_path, output_dir):
-    output_file = os.path.join(output_dir, 'tesseract_output.txt')
-    os.makedirs(output_dir, exist_ok=True)
+@tesseract.get("/ocr/v1/tesseract/page")
+async def tesseract_ocr_page(pdf_path: str, page_number: int) -> JSONResponse:
+    """
+    Perform OCR on a specific page of the given PDF using Tesseract.
     
+    Args:
+        pdf_path: Path to the PDF file
+        page_number: Page number to OCR (1-based index)
+    
+    Returns:
+        JSON response with OCR'd text for the specified page
+    """
+    try:
+        script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        pdf_path = os.path.join(script_dir, "pdfs", pdf_path)
+        #images = [render_pdf_to_base64png(local_pdf_path=pdf_path, page_num=page_number, target_longest_image_dim=1024)]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Error rendering PDF: " + str(e) )
+
+
+    # Convert PDF pages to images
+    images = convert_pdf_to_images(pdf_path, first_page=page_number, last_page=page_number)
+    
+    # # # Check if the requested page exists
+    # if page_number < 1 or page_number > len(images):
+    #     raise HTTPException(
+    #         status_code=400, 
+    #         detail=f"Invalid page number. The PDF has {len(images)} pages."
+    #     )
+    
+    # Get the image for the specified page (adjust for 0-based index)
+    #page_image = images[page_number - 1] # When we are OCRing the entire PDF, we extract the page image from the list of images.
+    page_image = images[0] # When we are OCRing a single page, we extract the page image from the list of images.
+    
+    # OCR the page using the existing ocr_page function
     DEBUG = False
     FORCE = False
-    DPI = 80  # 256 for high quality, 196 for medium quality, 120 for low quality
-    CONTRAST = 1.1  # lower than 1.0 to reduce contrast and brightness
+    DPI = 256
+    CONTRAST = 1.1
     LANG = "eng+fra"
-    MAX_WORKERS = 16
     
     def remove_bleed_through(image):
         # Convert to grayscale
@@ -52,23 +90,12 @@ def tesseract_ocr(pdf_path, output_dir):
         ocr_text = pytesseract.image_to_string(processed_image, lang=LANG, config=f"--dpi {DPI}")
         return ocr_text
     
-    # Convert PDF to images
-    images = convert_pdf_to_images(pdf_path)
+    # Perform OCR on the page
+    page_text = ocr_page(page_image)
     
-    full_text = ""
-    for i, img in enumerate(images):
-        page_text = ocr_page(img)
-        full_text += f"\n\n--- PAGE {i+1} ---\n\n"
-        full_text += page_text
-    
-    with open(output_file, 'w', encoding='utf-8') as f:
-        f.write(full_text)
-    
-    return full_text
-
-@tesseract.get("/ocr/v1/tesseract")
-async def tesseract_ocr(pdf_path: str, config: str = "") -> JSONResponse:
-    """Perform OCR on the given image using Tesseract."""
-    return {"Recievied ocr request": f"pdf_path: {pdf_path}, config: {config}"}
+    return {
+        "page_number": page_number,
+        "text": page_text
+    }
 
 
