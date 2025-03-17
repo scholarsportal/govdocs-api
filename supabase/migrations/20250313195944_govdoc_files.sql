@@ -43,7 +43,7 @@ create table if not exists ocr_evaluation_metrics (
   hallucination integer check (hallucination >= 0 and hallucination <= 5),
   hallucination_comment text,
   
-  evaluators_overall_comment text not null,
+  evaluators_overall_comment text,
   
   evaluation_submitted boolean default false not null,
   evaluation_submitted_by uuid references auth.users(id) not null,
