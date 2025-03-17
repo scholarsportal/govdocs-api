@@ -61,48 +61,6 @@ async def health_check():
 got_ocr_model = None
 got_ocr_processor = None
 
-# # Redis caching using redis-om
-
-# redis_client = get_redis_connection(
-#     host='localhost',
-#     port=6379,
-#     decode_responses=True
-# )
-
-
-# def cache_key(model: str, image_path: str, **kwargs) -> str:
-#   """Generate a unique cache key for the given model and image path."""
-#   params = json.dumps(kwargs, sort_keys=True)
-#   return f"{model}:{image_path}:{params}"
-
-
-# def get_cached_result(key: str) -> Optional[str]:
-#   """Get the cached result for the given key."""
-#   return redis_client.get(key)
-
-
-# def set_cached_result(key: str, result: str, expire_time: int = 60000) -> None:
-#   """Store the result in the Redis cache with the given expiration key."""
-#   redis_client.setex(key, expire_time, result)
-
-## Testing redis (delete later)
-# @app.get("/set_name")
-# async def set_last_name(first_name: str, last_name: str):
-#   redis_client.setex(f"{first_name}", 60, last_name)
-#   redis_client.setex(f"{last_name}", 60, first_name)
-#   return JSONResponse(content={"message": f"{first_name} {last_name} set successfully"})
-
-# @app.get("/last_name")
-# async def get_last_name(first_name: str):
-#   last_name = redis_client.get(first_name)
-#   return JSONResponse(content={"first_name": first_name, "last_name": last_name})
-
-# @app.get("/first_name")
-# async def get_first_name(last_name: str):
-#   first_name = redis_client.get(last_name)
-#   return JSONResponse(content={"first_name": first_name, "last_name": last_name})
-# ##
-
 
 # Helper functions
 
@@ -117,25 +75,6 @@ def get_image_path(image_id: str) -> str:
     raise HTTPException(status_code=404, detail="Image not found")
   return local_path
 
-# Pydantic model
-# Models for request validation
-
-
-class OCRRequest(BaseModel):
-  image_path: str
-  lang: Optional[str] = "eng"
-  config: Optional[str] = ""
-
-
-class GOTOCRRequest(BaseModel):
-  image_path: str
-  format: Optional[bool] = False
-  multi_page: Optional[bool] = False
-  crop_to_patches: Optional[bool] = False
-  max_patches: Optional[int] = None
-  color: Optional[str] = None
-  box: Optional[List[int]] = None
-  max_new_tokens: Optional[int] = 4096
 
 
 # Model initializations

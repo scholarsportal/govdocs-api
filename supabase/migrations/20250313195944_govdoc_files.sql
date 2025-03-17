@@ -29,7 +29,6 @@ create index if not exists idx_ocr_model on ocr_jobs(ocr_model);
 
 create table if not exists ocr_evaluation_metrics (
   id bigserial primary key,
-  document_id uuid references documents(id) not null,
   ocr_job_id bigint references ocr_jobs(id) not null,
 
   format_quality integer check (format_quality >= 0 and format_quality <= 5),
