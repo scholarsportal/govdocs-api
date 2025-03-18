@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request, Response, status, Depends, BackgroundTasks
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,6 +17,7 @@ from io import BytesIO
 from PIL import Image
 from transformers import AutoProcessor, Qwen2VLForConditionalGeneration, AutoModelForImageTextToText
 
+from govdocs_api.models.marker import marker
 from govdocs_api.utilities.caching import cache_key, get_cached_result, set_cached_result
 
 from govdocs_api.utilities.pdf_utilities import render_pdf_to_base64png
@@ -23,7 +25,9 @@ from olmocr.prompts import build_finetuning_prompt
 from olmocr.prompts.anchor import get_anchor_text
 
 from govdocs_api.models.tesseract import tesseract
-import logging
+from marker.models import create_model_dict
+
+
 
 app = FastAPI()
 
@@ -36,7 +40,7 @@ app.add_middleware(
 )
 
 app.include_router(tesseract)
-
+app.include_router(marker)
 
 
 @app.get("/olmocr/pdf-to-png")
