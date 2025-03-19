@@ -17,7 +17,7 @@ from io import BytesIO
 from PIL import Image
 from transformers import AutoProcessor, Qwen2VLForConditionalGeneration, AutoModelForImageTextToText
 
-from govdocs_api.models.marker import marker
+
 from govdocs_api.utilities.caching import cache_key, get_cached_result, set_cached_result
 
 from govdocs_api.utilities.pdf_utilities import render_pdf_to_base64png
@@ -25,6 +25,8 @@ from olmocr.prompts import build_finetuning_prompt
 from olmocr.prompts.anchor import get_anchor_text
 
 from govdocs_api.models.tesseract import tesseract
+from govdocs_api.models.marker import marker
+from govdocs_api.models.olmocr import olm_ocr
 from marker.models import create_model_dict
 
 
@@ -41,6 +43,7 @@ app.add_middleware(
 
 app.include_router(tesseract)
 app.include_router(marker)
+app.include_router(olm_ocr)
 
 
 @app.get("/olmocr/pdf-to-png")

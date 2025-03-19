@@ -1,9 +1,10 @@
 import base64
 import io
+from multiprocessing import Pool
 import subprocess
 from typing import List
 import os
-from pdf2image import convert_from_path
+from pdf2image import convert_from_path, pdfinfo_from_path
 from pathlib import Path
 
 from PIL import Image
@@ -90,178 +91,56 @@ def render_pdf_to_base64png(local_pdf_path: str, page_num: int, target_longest_i
     return base64.b64encode(pdftoppm_result.stdout).decode("utf-8")
 
 
-def render_pdf_to_base64webp(local_pdf_path: str, page: int, target_longest_image_dim: int = 1024):
-    base64_png = render_pdf_to_base64png(local_pdf_path, page, target_longest_image_dim)
-
-    png_image = Image.open(io.BytesIO(base64.b64decode(base64_png)))
-    webp_output = io.BytesIO()
-    png_image.save(webp_output, format="WEBP")
-
-    return base64.b64encode(webp_output.getvalue()).decode("utf-8")
 
 
-def get_png_dimensions_from_base64(base64_data) -> tuple[int, int]:
+
+MAX_WORKERS = 16
+
+
+def extract_images(pages: List[int], filepath: str, dpi: int) -> List[tuple[Image.Image, int]]:
     """
-    Returns the (width, height) of a PNG image given its base64-encoded data,
-    without base64-decoding the entire data or loading the PNG itself
+    Extract images from a PDF file for a list of pages.
 
-    Should be really fast to support filtering
-
-    Parameters:
-    - base64_data (str): Base64-encoded PNG image data.
-
-    Returns:
-    - tuple: (width, height) of the image.
-
-    Raises:
-    - ValueError: If the data is not a valid PNG image or the required bytes are not found.
+    :param pages: List of page numbers to extract images from
+    :param filepath: Path to the PDF file
+    :param dpi: Resolution for the extracted images
+    :return: List of tuples containing the extracted image and the page number
     """
-    # PNG signature is 8 bytes
-    png_signature_base64 = base64.b64encode(b"\x89PNG\r\n\x1a\n").decode("ascii")
-    if not base64_data.startswith(png_signature_base64[:8]):
-        raise ValueError("Not a valid PNG file")
+    images = convert_from_path(filepath, dpi=dpi, first_page=pages[0], last_page=pages[-1])
+    return [(img, page_num) for img, page_num in zip(images, pages)]
 
-    # Positions in the binary data where width and height are stored
-    width_start = 16  # Byte position where width starts (0-based indexing)
-    _width_end = 20  # Byte position where width ends (exclusive)
-    _height_start = 20
-    height_end = 24
+def extract_images_from_pdf(filepath: str, dpi: int = 256, first_page: int = 1, last_page: int = None) -> List[tuple[Image.Image, int]]:
+    """
+    Reads a PDF file and extracts images from the specified pages.
 
-    # Compute the byte range needed (from width_start to height_end)
-    start_byte = width_start
-    end_byte = height_end
+    :param filepath: Path to the PDF file
+    :param dpi: Resolution for the extracted images
+    :param first_page: First page number to extract images  (1-based index)
+    :param last_page: Last page number to extract images from (1-based index)
+    :return: List of tuples containing the extracted image and the page number
+    """
+    # set total_pages to last_page if it is not None
+    if last_page is not None:
+        total_pages = last_page
+    else:
+        total_pages = pdfinfo_from_path(pdf_path=filepath, poppler_path=poppler_path)['Pages']
+    # Split the pages into chunks for parallel processing
+    page_chunks = [
+        list(range(i, min(i + (total_pages // MAX_WORKERS) + 1, total_pages + 1)))
+        for i in range(1, total_pages + 1, (total_pages // MAX_WORKERS) + 1)
+    ]
+    # Use a multiprocessing Pool to process the chunks
+    with Pool(MAX_WORKERS) as pool:
+        results = pool.starmap(extract_images, [(pages, filepath, dpi) for pages in page_chunks])
+    # Flatten the list of results since each chunk is processed separately
+    images = [result[0] for result in results ] #for item in result
+    return images
 
-    # Calculate base64 character positions
-    # Each group of 3 bytes corresponds to 4 base64 characters
-    base64_start = (start_byte // 3) * 4
-    base64_end = ((end_byte + 2) // 3) * 4  # Add 2 to ensure we cover partial groups
+def total_pages(pdf_path: str) -> int:
+    """
+    Get the total number of pages in a PDF file.
 
-    # Extract the necessary base64 substring
-    base64_substring = base64_data[base64_start:base64_end]
-
-    # Decode only the necessary bytes
-    decoded_bytes = base64.b64decode(base64_substring)
-
-    # Compute the offset within the decoded bytes
-    offset = start_byte % 3
-
-    # Extract width and height bytes
-    width_bytes = decoded_bytes[offset : offset + 4]
-    height_bytes = decoded_bytes[offset + 4 : offset + 8]
-
-    if len(width_bytes) < 4 or len(height_bytes) < 4:
-        raise ValueError("Insufficient data to extract dimensions")
-
-    # Convert bytes to integers
-    width = int.from_bytes(width_bytes, "big")
-    height = int.from_bytes(height_bytes, "big")
-
-    return width, height
-
-# Helper function to convert PDF to images
-def convert_pdf_to_images(
-  pdf_path,
-  dpi=200,
-  output_folder=None,
-  first_page=None,
-  last_page=None,
-  fmt="ppm",
-  jpegopt=None,
-  thread_count=1,
-  userpw=None,
-  ownerpw=None,
-  use_cropbox=False,
-  strict=False,
-  transparent=False,
-  single_file=False,
-  output_file=None,
-  grayscale=False,
-  size=None,
-  paths_only=False,
-  use_pdftocairo=False,
-  timeout=None,
-  hide_annotations=False,
-):
-  """
-    Convert PDF to a list of PIL images with configurable parameters.
-    
-    :param pdf_path: Path to the PDF that you want to convert
-    :type pdf_path: Union[str, PurePath]
-    :param dpi: Image quality in DPI (default 200), defaults to 200
-    :type dpi: int, optional
-    :param output_folder: Write the resulting images to a folder (instead of directly in memory), defaults to None
-    :type output_folder: Union[str, PurePath], optional
-    :param first_page: First page to process, defaults to None
-    :type first_page: int, optional
-    :param last_page: Last page to process before stopping, defaults to None
-    :type last_page: int, optional
-    :param fmt: Output image format, defaults to "ppm"
-    :type fmt: str, optional
-    :param jpegopt: jpeg options `quality`, `progressive`, and `optimize` (only for jpeg format), defaults to None
-    :type jpegopt: Dict, optional
-    :param thread_count: How many threads we are allowed to spawn for processing, defaults to 1
-    :type thread_count: int, optional
-    :param userpw: PDF's password, defaults to None
-    :type userpw: str, optional
-    :param ownerpw: PDF's owner password, defaults to None
-    :type ownerpw: str, optional
-    :param use_cropbox: Use cropbox instead of mediabox, defaults to False
-    :type use_cropbox: bool, optional
-    :param strict: When a Syntax Error is thrown, it will be raised as an Exception, defaults to False
-    :type strict: bool, optional
-    :param transparent: Output with a transparent background instead of a white one, defaults to False
-    :type transparent: bool, optional
-    :param single_file: Uses the -singlefile option from pdftoppm/pdftocairo, defaults to False
-    :type single_file: bool, optional
-    :param output_file: What is the output filename or generator, defaults to uuid_generator()
-    :type output_file: Any, optional
-    :param poppler_path: Path to look for poppler binaries, defaults to None
-    :type poppler_path: Union[str, PurePath], optional
-    :param grayscale: Output grayscale image(s), defaults to False
-    :type grayscale: bool, optional
-    :param size: Size of the resulting image(s), uses the Pillow (width, height) standard, defaults to None
-    :type size: Union[Tuple, int], optional
-    :param paths_only: Don't load image(s), return paths instead (requires output_folder), defaults to False
-    :type paths_only: bool, optional
-    :param use_pdftocairo: Use pdftocairo instead of pdftoppm, may help performance, defaults to False
-    :type use_pdftocairo: bool, optional
-    :param timeout: Raise PDFPopplerTimeoutError after the given time, defaults to None
-    :type timeout: int, optional
-    :param hide_annotations: Hide PDF annotations in the output, defaults to False
-    :type hide_annotations: bool, optional
-    :raises NotImplementedError: Raised when conflicting parameters are given (hide_annotations for pdftocairo)
-    :raises PDFPopplerTimeoutError: Raised after the timeout for the image processing is exceeded
-    :raises PDFSyntaxError: Raised if there is a syntax error in the PDF and strict=True
-    :return: A list of Pillow images, one for each page between first_page and last_page
-    :rtype: List[Image.Image]
-  """
-  kwargs = {
-    'dpi': dpi,
-    'output_folder': output_folder,
-    'first_page': first_page,
-    'last_page': last_page,
-    'fmt': fmt,
-    'jpegopt': jpegopt,
-    'thread_count': thread_count,
-    'userpw': userpw,
-    'ownerpw': ownerpw,
-    'use_cropbox': use_cropbox,
-    'strict': strict,
-    'transparent': transparent,
-    'single_file': single_file,
-    'grayscale': grayscale,
-    'size': size,
-    'paths_only': paths_only,
-    'use_pdftocairo': use_pdftocairo,
-    'timeout': timeout,
-    'hide_annotations': hide_annotations,
-  }
-  
-  # Only add output_file if it's not None
-  if output_file is not None:
-    kwargs['output_file'] = output_file
-  
-  if platform.system() == "Windows":
-    kwargs['poppler_path'] = Path("C:\\poppler\\poppler-24.08.0\\Library\\bin\\")
-  
-  return convert_from_path(pdf_path, **kwargs)
+    :param pdf_path: Path to the PDF file
+    :return: Total number of pages in the PDF
+    """
+    return pdfinfo_from_path(pdf_path=pdf_path, poppler_path=poppler_path)['Pages']
