@@ -7,9 +7,11 @@ from typing import Optional, List
 import json
 import os
 
-os.environ["TRANSFORMERS_CACHE"] = "/local/home/hfurquan/myProjects/Leaderboard/cache"
-os.environ["HF_HOME"] = "/local/home/hfurquan/myProjects/Leaderboard/cache"
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+## IGNORE
+# os.environ["TRANSFORMERS_CACHE"] = "/local/home/hfurquan/myProjects/Leaderboard/cache"
+# os.environ["HF_HOME"] = "/local/home/hfurquan/myProjects/Leaderboard/cache"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+##
 
 import torch
 import base64
