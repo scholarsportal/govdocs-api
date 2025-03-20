@@ -5,8 +5,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List
 import json
-from redis_om import get_redis_connection
 import os
+
+os.environ["TRANSFORMERS_CACHE"] = "/local/home/hfurquan/myProjects/Leaderboard/cache"
+os.environ["HF_HOME"] = "/local/home/hfurquan/myProjects/Leaderboard/cache"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
 import torch
 import base64
