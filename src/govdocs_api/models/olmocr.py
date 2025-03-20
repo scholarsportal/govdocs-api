@@ -22,6 +22,9 @@ from urllib.parse import urlparse
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from concurrent.futures.process import BrokenProcessPool
 from typing import List, Dict, Any, Optional, Tuple
+import multiprocessing
+import logging
+import re
 
 from olmocr.check import (
     check_poppler_version,
@@ -57,6 +60,8 @@ process_pool = ProcessPoolExecutor(
 # Constants
 SGLANG_SERVER_PORT = 30024  # Adjust as needed
 
+sglang_logger = logging.getLogger("sglang")
+sglang_logger.setLevel(logging.INFO)
 # Initialize logger
 logger = logging.getLogger("olm-ocr-api")
 logger.setLevel(logging.DEBUG)
@@ -138,9 +143,20 @@ class WorkerTracker:
                 }
         return active_workers
 
+@dataclass(frozen=True)
+class PageResult:
+    s3_path: str
+    page_num: int
+    response: PageResponse
+
+    input_tokens: int
+    output_tokens: int
+    is_fallback: bool
+
 async def sglang_server_task(semaphore):
-    model_name_or_path = args.model
-    model_name_or_path = '/local/home/hfurquan/myProjects/Leaderboard/cache/models--allenai--olmOCR-7B-0225-preview'
+    #model_name_or_path = args.model
+    #model_name_or_path = '/local/home/hfurquan/myProjects/Leaderboard/cache/models--allenai--olmOCR-7B-0225-preview'
+    model_name_or_path = "allenai/olmOCR-7B-0225-preview"
 
     # Check GPU memory, lower mem devices need a bit less KV cache space because the VLM takes additional memory
     gpu_memory = torch.cuda.get_device_properties(0).total_memory / (1024**3)  # Convert to GB
@@ -161,7 +177,7 @@ async def sglang_server_task(semaphore):
         "--device",
         "cuda",
         "--base-gpu-id",
-        "2"
+        "0"
     ]
     cmd.extend(mem_fraction_arg)
 
@@ -403,7 +419,7 @@ async def build_page_query(local_pdf_path: str, page: int, target_longest_image_
             }
         ],
         "max_tokens": MAX_TOKENS,
-        "temperature": 0.1,  # Start with low temperature
+        "temperature": 0.8, 
     }
     
     query_end = time.perf_counter()
@@ -423,7 +439,7 @@ async def process_page(worker_id: int, pdf_path: str, page_num: int,
                      max_retries: int = 5) -> PageResult:
     """Process a single page using SGLang with advanced error handling and retries."""
     COMPLETION_URL = f"http://localhost:{SGLANG_SERVER_PORT}/v1/chat/completions"
-    TEMPERATURE_BY_ATTEMPT = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+    TEMPERATURE_BY_ATTEMPT = [0.8, 0.9]
     
     exponential_backoffs = 0
     local_anchor_text_len = target_anchor_text_len
@@ -450,8 +466,6 @@ async def process_page(worker_id: int, pdf_path: str, page_num: int,
                 image_rotation=local_image_rotation
             )
             
-            # Update temperature based on attempt number
-            query["temperature"] = TEMPERATURE_BY_ATTEMPT[min(attempt, len(TEMPERATURE_BY_ATTEMPT) - 1)]
             
             performance_metrics.update(prep_performance)
             logger.info(f"Built page query for {pdf_path} page {page_num+1}, attempt {attempt+1}")
@@ -696,7 +710,7 @@ async def lifespan(app: FastAPI):
     # As soon as one worker is no longer saturating the gpu, the next one can start sending requests
     semaphore = asyncio.Semaphore(1)
 
-    sglang_server = asyncio.create_task(sglang_server_host(semaphore))
+    await sglang_server_task(semaphore)
 
     await sglang_server_ready()
     print("OLM OCR model loaded ✅")
@@ -718,16 +732,16 @@ olm_ocr = APIRouter(lifespan=lifespan)
 
 async def process_page(args, worker_id: int, pdf_orig_path: str, pdf_local_path: str, page_num: int) -> PageResult:
     COMPLETION_URL = f"http://localhost:{SGLANG_SERVER_PORT}/v1/chat/completions"
-    MAX_RETRIES = args.max_page_retries
+    MAX_RETRIES = 5
 
     exponential_backoffs = 0
-    local_anchor_text_len = args.target_anchor_text_len
+    local_anchor_text_len = 6000
     local_image_rotation = 0
     attempt = 0
     await tracker.track_work(worker_id, f"{pdf_orig_path}-{page_num}", "started")
 
     while attempt < MAX_RETRIES:
-        query = await build_page_query(pdf_local_path, page_num, args.target_longest_image_dim, local_anchor_text_len, image_rotation=local_image_rotation)
+        query = await build_page_query(pdf_local_path, page_num, 1024, local_anchor_text_len, image_rotation=local_image_rotation)
 
         logger.info(f"Built page query for {pdf_orig_path}-{page_num}")
 

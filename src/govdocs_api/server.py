@@ -10,7 +10,7 @@ import os
 ## IGNORE
 os.environ["TRANSFORMERS_CACHE"] = "/local/home/hfurquan/myProjects/Leaderboard/cache"
 os.environ["HF_HOME"] = "/local/home/hfurquan/myProjects/Leaderboard/cache"
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2,3"
 ##
 
 import torch
