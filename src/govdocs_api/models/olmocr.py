@@ -693,40 +693,40 @@ async def process_pdf(pdf_path: str,
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # global model
-    # global processor
-    # model = Qwen2VLForConditionalGeneration.from_pretrained(
-    #     "allenai/olmOCR-7B-0225-preview", 
-    #     torch_dtype=torch.bfloat16
-    # ).eval()
-    # processor = AutoProcessor.from_pretrained("Qwen/Qwen2-VL-7B-Instruct")
-    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    # model.to(device)
+    global model
+    global processor
+    model = Qwen2VLForConditionalGeneration.from_pretrained(
+        "allenai/olmOCR-7B-0225-preview", 
+        torch_dtype=torch.bfloat16
+    ).eval()
+    processor = AutoProcessor.from_pretrained("Qwen/Qwen2-VL-7B-Instruct")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model.to(device)
 
 
     # Create a semaphore to control worker access
     # We only allow one worker to move forward with requests, until the server has no more requests in its queue
     # This lets us get full utilization by having many workers, but also to be outputting dolma docs as soon as possible
     # As soon as one worker is no longer saturating the gpu, the next one can start sending requests
-    semaphore = asyncio.Semaphore(1)
+    # semaphore = asyncio.Semaphore(1)
 
-    await sglang_server_task(semaphore)
+    # await sglang_server_task(semaphore)
 
-    await sglang_server_ready()
+    # await sglang_server_ready()
     print("OLM OCR model loaded ✅")
     
     yield
 
     # Wait for server to stop
-    process_pool.shutdown(wait=False)
+    # process_pool.shutdown(wait=False)
 
-    sglang_server.cancel()
-    logger.info("Work done")
+    # sglang_server.cancel()
+    # logger.info("Work done")
     
-    # del model
-    # del processor
-    # torch.cuda.empty_cache()
-    # gc.collect()
+    del model
+    del processor
+    torch.cuda.empty_cache()
+    gc.collect()
 
 olm_ocr = APIRouter(lifespan=lifespan)
 

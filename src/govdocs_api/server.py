@@ -46,8 +46,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(tesseract)
-app.include_router(marker)
+# app.include_router(tesseract)
+# app.include_router(marker)
 app.include_router(olm_ocr)
 
 
