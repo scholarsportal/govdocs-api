@@ -1075,7 +1075,7 @@ def olm(pdf_path: str, first_page: int = 1, last_page: int = None, temprature: f
             result_dict["pages"].append(result)
             full_text += f"\n\n--- PAGE {result['page']} ---\n\n{result['text']}"
 
-    Sort the pages by page number
+    #Sort the pages by page number
     result_dict["pages"] = sorted(result_dict["pages"], key=lambda x: x["page"])
     result_dict["full_text"] = full_text
     
