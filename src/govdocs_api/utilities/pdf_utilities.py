@@ -123,7 +123,10 @@ def extract_images_from_pdf(filepath: str, dpi: int = 256, first_page: int = 1, 
     if last_page is not None:
         total_pages = last_page
     else:
-        total_pages = pdfinfo_from_path(pdf_path=filepath, poppler_path=poppler_path)['Pages']
+        if platform.system() == "Windows":
+            total_pages = pdfinfo_from_path(pdf_path=pdf_path, poppler_path=poppler_path)['Pages']
+        else:
+            total_pages = pdfinfo_from_path(pdf_path=pdf_path)['Pages']
     # Split the pages into chunks for parallel processing
     page_chunks = [
         list(range(i, min(i + (total_pages // MAX_WORKERS) + 1, total_pages + 1)))
@@ -143,4 +146,7 @@ def total_pages(pdf_path: str) -> int:
     :param pdf_path: Path to the PDF file
     :return: Total number of pages in the PDF
     """
-    return pdfinfo_from_path(pdf_path=pdf_path, poppler_path=poppler_path)['Pages']
+    if platform.system() == "Windows":
+        return pdfinfo_from_path(pdf_path=pdf_path, poppler_path=poppler_path)['Pages']
+    else:
+        return pdfinfo_from_path(pdf_path=pdf_path)['Pages']

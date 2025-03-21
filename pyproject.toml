@@ -10,7 +10,7 @@ readme = "README.md"
 python = "<4.0,>=3.11"
 fastapi = {extras = ["standard"], version = "^0.115.8"}
 pytesseract = "^0.3.13"
-transformers = "^4.49.0"
+transformers = "^4.48.0"
 huggingface-hub = ">=0.8.1,<0.29.1"
 pydantic = "^2.10.6"
 redis-om = "^0.3.3"
@@ -26,6 +26,9 @@ pypdf = "^5.3.1"
 torch = { version = "2.5.1", source = "pytorch" }
 torchvision = { version = "0.20.1", source = "pytorch" }
 torchaudio = { version = "2.5.1", source = "pytorch" }
+sgl-kernel = "0.0.5"
+flashinfer-python = "^0.2.3"
+sglang = {extras = ["all"], version = "^0.4.4.post1"}
 
 [[tool.poetry.source]]
 name = "pytorch"
