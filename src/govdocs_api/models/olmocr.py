@@ -903,7 +903,7 @@ def process_page(page_num, pdf_path, temperature, dpi, max_new_tokens, num_retur
     
     # Render page to an image
     render_start = time.perf_counter()
-    image_base64 = render_pdf_to_base64png(pdf_path, page_num, target_longest_image_dim=dpi)
+    image_base64 = render_pdf_to_base64png(pdf_path, page_num, target_longest_image_dim=1024)
     render_end = time.perf_counter()
     perf_metrics["render_time"] = render_end - render_start
     
@@ -1018,7 +1018,7 @@ def olm(pdf_path: str, first_page: int = 1, last_page: int = None, temprature: f
 
     # Process pages
     processing_start = time.perf_counter()
-    for page in range(3):  # num_pages
+    for page in range(1, 4):  # num_pages
         page_start = time.perf_counter()
         output.append(process_page(
             page_num=page,
