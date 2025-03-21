@@ -98,7 +98,7 @@ def process_page(page_num, pdf_path, temperature, dpi, max_new_tokens, num_retur
     return {"page": page_num + 1, "text": page_text}
 
 @olm_ocr.get("/olmocr")
-def olm(pdf_path: str,tempraure: float = 0.9, dpI:int = 256, max_new_tokens: int = 5000,num_return_sequences: int = 1):
+def olm_ocr(pdf_path: str,tempraure: float = 0.9, dpI:int = 256, max_new_tokens: int = 5000,num_return_sequences: int = 1):
     """
     Perform OCR on a specific page of the given PDF using Tesseract.
     
