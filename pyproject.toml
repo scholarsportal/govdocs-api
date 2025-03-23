@@ -29,6 +29,7 @@ torchaudio = { version = "2.5.1", source = "pytorch" }
 docling-core = "^2.23.3"
 ipykernel = "^6.29.5"
 sentencepiece = "^0.2.0"
+supabase = "^2.14.0"
 
 [[tool.poetry.source]]
 name = "pytorch"
