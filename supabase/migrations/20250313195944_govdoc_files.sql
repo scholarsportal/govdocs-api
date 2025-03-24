@@ -22,6 +22,9 @@ create table if not exists ocr_jobs (
   created_at timestamp with time zone default now() not null
 );
 
+-- Enable realtime for ocr_jobs
+alter publication supabase_realtime add table ocr_jobs;
+
 create index if not exists idx_ocr_jobs_document_id on ocr_jobs(document_id);
 create index if not exists idx_ocr_document_id_page_number on ocr_jobs(document_id, page_number);
 create index if not exists idx_ocr_model on ocr_jobs(ocr_model);
