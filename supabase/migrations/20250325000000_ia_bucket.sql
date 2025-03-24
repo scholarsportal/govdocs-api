@@ -4,22 +4,44 @@ values ('ia_bucket', 'ia_bucket', true);
 
 -- Policies for ia_bucket
 -- Only admins can upload/modify/delete files in the ia_bucket
+-- create policy "Admin users can upload to ia_bucket"
+-- on storage.objects for insert to authenticated with check (
+--   bucket_id = 'ia_bucket' and
+--   (select position_title from app_users where id = auth.uid()) = 'admin'
+-- );
+
+-- create policy "Admin users can update in ia_bucket"
+-- on storage.objects for update to authenticated using (
+--   bucket_id = 'ia_bucket' and
+--   (select position_title from app_users where id = auth.uid()) = 'admin'
+-- );
+
+-- create policy "Admin users can delete from ia_bucket"
+-- on storage.objects for delete to authenticated using (
+--   bucket_id = 'ia_bucket' and
+--   (select position_title from app_users where id = auth.uid()) = 'admin'
+-- );
+
+-- -- Anyone can view the rendered images
+-- create policy "Anyone can view ia_bucket"
+-- on storage.objects for select to authenticated using (
+--   bucket_id = 'ia_bucket'
+-- );
+
+-- Temporary changes, prod should use above policies
 create policy "Admin users can upload to ia_bucket"
 on storage.objects for insert to authenticated with check (
-  bucket_id = 'ia_bucket' and
-  (select position_title from app_users where id = auth.uid()) = 'admin'
+  bucket_id = 'ia_bucket' 
 );
 
 create policy "Admin users can update in ia_bucket"
 on storage.objects for update to authenticated using (
-  bucket_id = 'ia_bucket' and
-  (select position_title from app_users where id = auth.uid()) = 'admin'
+  bucket_id = 'ia_bucket' 
 );
 
 create policy "Admin users can delete from ia_bucket"
 on storage.objects for delete to authenticated using (
-  bucket_id = 'ia_bucket' and
-  (select position_title from app_users where id = auth.uid()) = 'admin'
+  bucket_id = 'ia_bucket'
 );
 
 -- Anyone can view the rendered images

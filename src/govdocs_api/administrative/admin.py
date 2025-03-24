@@ -273,7 +273,7 @@ async def list_documents():
     
     try:
         result = supabase.from_("documents") \
-            .select("*, document_processing(*)") \
+            .select("*") \
             .execute()
         
         return result.data
