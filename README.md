@@ -82,13 +82,33 @@ Ubunutu/Linux:
 
 ```
 sudo apt install tesseract-ocr
-sudo apt install libtesseract-dev
 ```
 
-##### Install required packages
+## Setup enviornment variables & Initialize Supabase
+
+1. Copy the .env.example file to a new .env file.
+
+2. Install the supabase cli following these instructions: [Supabase CLI install](https://supabase.com/docs/guides/local-development/cli/getting-started)
+
+3. From the project directory run:
+
 ```bash
-poetry config virtualenvs.in-project true # Allow poetry to create a virual env within project directory
+supabase start
+```
+
+This will setup a local supabase instance on your machine. Copy the `API URL` and `anon key` and paste it in the .env file you created.
+
+### Install required packages
+
+Install the required packages:
+
+```bash
 poetry install
+```
+
+Run the server:
+
+```bash
 poetry run fastapi dev src/govdocs_api/server.py # run the api server in development mode
 poetry run fastapi run src/govdocs_api/server.py # run the api server in production mode
 ```

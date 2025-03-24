@@ -17,24 +17,20 @@ from supabase import create_client, Client
 from pydantic import BaseModel, Field
 import concurrent.futures
 from govdocs_api.utilities.pdf_utilities import render_pdf_to_base64png, total_pages
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Initialize Supabase client
-# supabase_url = os.environ.get("SUPABASE_URL")
-# supabase_key = os.environ.get("SUPABASE_ANON_KEY")
-# print(f'Supbase Url {supabase_url} Supabase Key {supabase_key}')
-# supabase: Client = create_client(supabase_url, supabase_key) if supabase_url and supabase_key else None
+supabase_url = os.environ.get("SUPABASE_URL")
+supabase_key = os.environ.get("SUPABASE_ANON_KEY")
+print(f'Supbase Url {supabase_url} Supabase Key {supabase_key}')
+supabase: Client = create_client(supabase_url, supabase_key) if supabase_url and supabase_key else None
 
-supabase: Client = create_client("https://szttkfxiabqoxvrmrbxp.supabase.co", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN6dHRrZnhpYWJxb3h2cm1yYnhwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDI4MzI2MjgsImV4cCI6MjA1ODQwODYyOH0.alR9jeVLXwMRu2gRzDwCEOOcXDs_Kaw6taSLN1tZAHg")
-response = supabase.auth.sign_in_with_password(
-    {
-        "email": "admin@govdocs.com", 
-        "password": "admin123",
-    }
-)
 
 # Create a temporary directory for downloaded files
 TEMP_DIR = Path(os.path.join(tempfile.gettempdir(), "govdocs-downloads"))
