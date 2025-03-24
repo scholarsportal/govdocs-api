@@ -48,6 +48,8 @@ def process_page(page_num, pdf_path, target_longest_image_dim=1024, max_new_toke
     """Process a single page and return the markdown text with performance metrics."""
     perf_metrics = {}
     total_start = time.perf_counter()
+
+    print(f"Rendering page_num: {page_num} of {pdf_path}")
     
     # Render page to an image
     render_start = time.perf_counter()
@@ -163,7 +165,11 @@ def smoldocling_ocr(
         last_page = min(num_pages, first_page + max_pages - 1)
     
     # Convert to 0-based indexing for internal use
-    pages_to_process = range(first_page - 1, last_page)
+    pages_to_process = range(first_page, last_page + 1)
+
+    print(f"pages_to_process: {pages_to_process}")
+    print(f"len(pages_to_process): {len(pages_to_process)}")
+    
     
     # Process pages
     processing_start = time.perf_counter()
@@ -187,12 +193,12 @@ def smoldocling_ocr(
             try:
                 result = future.result()
                 results.append(result)
-                print(f"Page {page_num+1} processed successfully")
+                print(f"Page {page_num} processed successfully")
             except Exception as e:
-                print(f"Error processing page {page_num+1}: {str(e)}")
+                print(f"Error processing page {page_num}: {str(e)}")
                 results.append({
-                    "page_number": page_num + 1,
-                    "markdown": f"Error processing page {page_num+1}: {str(e)}",
+                    "page_number": page_num ,
+                    "markdown": f"Error processing page {page_num}: {str(e)}",
                     "raw_doctags": "",
                     "performance": {"error": str(e)}
                 })
