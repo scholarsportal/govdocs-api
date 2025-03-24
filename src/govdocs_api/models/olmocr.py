@@ -903,7 +903,7 @@ def process_page(page_num, pdf_path, temperature, dpi, max_new_tokens, num_retur
     
     # Render page to an image
     render_start = time.perf_counter()
-    image_base64 = render_pdf_to_base64png(pdf_path, page_num, target_longest_image_dim=1024)
+    image_base64 = render_pdf_to_base64png(pdf_path, page_num, target_longest_image_dim=2048)
     render_end = time.perf_counter()
     perf_metrics["render_time"] = render_end - render_start
     

@@ -23,9 +23,18 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Initialize Supabase client
-supabase_url = os.environ.get("SUPABASE_URL")
-supabase_key = os.environ.get("SUPABASE_ANON_KEY")
-supabase: Client = create_client(supabase_url, supabase_key) if supabase_url and supabase_key else None
+# supabase_url = os.environ.get("SUPABASE_URL")
+# supabase_key = os.environ.get("SUPABASE_ANON_KEY")
+# print(f'Supbase Url {supabase_url} Supabase Key {supabase_key}')
+# supabase: Client = create_client(supabase_url, supabase_key) if supabase_url and supabase_key else None
+
+supabase: Client = create_client("https://szttkfxiabqoxvrmrbxp.supabase.co", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN6dHRrZnhpYWJxb3h2cm1yYnhwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDI4MzI2MjgsImV4cCI6MjA1ODQwODYyOH0.alR9jeVLXwMRu2gRzDwCEOOcXDs_Kaw6taSLN1tZAHg")
+response = supabase.auth.sign_in_with_password(
+    {
+        "email": "admin@govdocs.com", 
+        "password": "admin123",
+    }
+)
 
 # Create a temporary directory for downloaded files
 TEMP_DIR = Path(os.path.join(tempfile.gettempdir(), "govdocs-downloads"))
@@ -57,8 +66,10 @@ def get_ia_download_url(barcode: Union[int, str]) -> str:
 async def download_file(url: str, dest_path: Path) -> Path:
     """Download a file from a URL to the specified path."""
     logger.info(f"Downloading {url} to {dest_path}")
+
+    timeout = httpx.Timeout(60.0, connect=10.0)  # 60s read timeout, 10s connect timeout
     
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=timeout) as client:
         response = await client.get(url, follow_redirects=True)
         if response.status_code != 200:
             raise HTTPException(status_code=response.status_code, 
@@ -131,12 +142,16 @@ async def process_document(document_id: str, ia_link: str, barcode: str, max_pag
         download_url = get_ia_download_url(barcode)
         pdf_path = TEMP_DIR / f"{barcode}.pdf"
         await download_file(download_url, pdf_path)
+
+        print(f"PDF download complete ✅")
         
         # Get total number of pages
         num_pages = total_pages(pdf_path)
         pages_to_process = min(num_pages, max_pages)
         
         await update_processing_status(document_id, "processing", 0, pages_to_process)
+
+        print(f"PDF processing status updated ✅")
         
         # Process pages in batches
         batch_size = 10
