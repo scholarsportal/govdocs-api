@@ -59,4 +59,4 @@ create table if not exists ocr_evaluation_metrics (
   )
 );
 
-create index if not exists idx_ocr_evaluation_metrics_document_id on ocr_evaluation_metrics(document_id);
+create index if not exists idx_ocr_evaluation_metrics_document_id on ocr_evaluation_metrics(ocr_job_id);
