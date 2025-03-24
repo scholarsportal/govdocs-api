@@ -16,19 +16,28 @@ COPY . /app
 RUN echo ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true | debconf-set-selections
 
 # Add system dependencies for OlmOCR
-RUN apt-get update && apt-get install -y \
-    poppler-utils \
-    ttf-mscorefonts-installer \
-    fonts-crosextra-caladea \
-    fonts-crosextra-carlito \
-    gsfonts \
-    lcdf-typetools \
-    git \
-    build-essential
+# RUN apt-get update && apt-get install -y \
+#     poppler-utils \
+#     ttf-mscorefonts-installer \
+#     fonts-crosextra-caladea \
+#     fonts-crosextra-carlito \
+#     gsfonts \
+#     lcdf-typetools \
+#     git \
+#     build-essential
 
-# Install sglang with flashinfer for GPU inference
-RUN pip install sgl-kernel==0.0.3.post1 --force-reinstall --no-deps && \
-    pip install "sglang[all]==0.4.2" --find-links https://flashinfer.ai/whl/cu124/torch2.4/flashinfer/
+# Add system dependencies for pdf utilities
+RUN apt-get update && apt-get install -y \
+poppler-utils \
+ttf-mscorefonts-installer \
+fonts-crosextra-caladea \
+fonts-crosextra-carlito \
+gsfonts \
+lcdf-typetools \
+git \
+build-essential \
+&& apt-get clean \
+&& rm -rf /var/lib/apt/lists/*
 
 # Install Poetry
 RUN pip install poetry
