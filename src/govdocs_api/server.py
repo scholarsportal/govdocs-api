@@ -6,9 +6,9 @@ from typing import Optional
 import os
 
 ## IGNORE
-# os.environ["TRANSFORMERS_CACHE"] = "/local/home/hfurquan/myProjects/Leaderboard/cache"
-# os.environ["HF_HOME"] = "/local/home/hfurquan/myProjects/Leaderboard/cache"
-# os.environ["CUDA_VISIBLE_DEVICES"] = "2,3"
+os.environ["TRANSFORMERS_CACHE"] = "/local/home/hfurquan/myProjects/Leaderboard/cache"
+os.environ["HF_HOME"] = "/local/home/hfurquan/myProjects/Leaderboard/cache"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2,3"
 ##
 
 from govdocs_api.models.tesseract import tesseract
@@ -29,7 +29,7 @@ app.add_middleware(
 
 app.include_router(tesseract)
 app.include_router(marker)
-# app.include_router(olm_ocr)
+app.include_router(olm_ocr)
 # app.include_router(smoldocling)
 app.include_router(admin_router)
 

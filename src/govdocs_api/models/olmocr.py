@@ -996,12 +996,12 @@ def process_page(page_num, barcode, temperature, dpi, max_new_tokens, num_return
     }
 
 @olm_ocr.get("/olmocr")
-def olm(pdf_path: str, first_page: int = 1, last_page: int = None, temprature: float = 0.9, dpi:int = 256, max_new_tokens: int = 5000, num_return_sequences: int = 1):
+def olm(barcode: str, last_page: int, first_page: int = 1, temprature: float = 0.9, dpi:int = 256, max_new_tokens: int = 5000, num_return_sequences: int = 1):
     """
     Perform OCR on a specific page of the given PDF using Tesseract.
     
     Args:
-        pdf_path: Path to the PDF file
+        barcode: Barcode identifier for the document
         first_page: First Page number to OCR (1-based index)
         last_page: Last Page number to OCR (1-based index)
         temprature: The value used to control the randomness of the generated text
@@ -1013,21 +1013,21 @@ def olm(pdf_path: str, first_page: int = 1, last_page: int = None, temprature: f
     """
     api_start = time.perf_counter()
     
-    # Locate the PDF file
-    pdf_locate_start = time.perf_counter()
-    try:
-        script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        pdf_path = os.path.join(script_dir, "pdfs", pdf_path)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Error rendering PDF: " + str(e))
-    pdf_locate_end = time.perf_counter()
+    # # Locate the PDF file
+    # pdf_locate_start = time.perf_counter()
+    # try:
+    #     script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    #     pdf_path = os.path.join(script_dir, "pdfs", pdf_path)
+    # except Exception as e:
+    #     raise HTTPException(status_code=500, detail="Error rendering PDF: " + str(e))
+    # pdf_locate_end = time.perf_counter()
     
     # Get the number of pages in the PDF
-    page_count_start = time.perf_counter()
-    num_pages = total_pages(pdf_path)
-    page_count_end = time.perf_counter()
+    # page_count_start = time.perf_counter()
+    # num_pages = total_pages(pdf_path)
+    # page_count_end = time.perf_counter()
 
-    print(f"Total number of pages of {pdf_path}: {num_pages}")
+    #print(f"Total number of pages of {pdf_path}: {num_pages}")
     
     # Configure processing parameters
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -1035,11 +1035,11 @@ def olm(pdf_path: str, first_page: int = 1, last_page: int = None, temprature: f
 
     # Process pages
     processing_start = time.perf_counter()
-    for page in range(1, 4):  # num_pages
+    for page in range(first_page, last_page + 1):  # num_pages
         page_start = time.perf_counter()
         output.append(process_page(
             page_num=page,
-            pdf_path=pdf_path, 
+            barcode=barcode, 
             temperature=temprature, 
             dpi=dpi, 
             max_new_tokens=max_new_tokens, 
@@ -1059,8 +1059,8 @@ def olm(pdf_path: str, first_page: int = 1, last_page: int = None, temprature: f
     
     # Add overall performance metrics
     performance_summary = {
-        "pdf_location_time": pdf_locate_end - pdf_locate_start,
-        "page_counting_time": page_count_end - page_count_start,
+        # "pdf_location_time": pdf_locate_end - pdf_locate_start,
+        # "page_counting_time": page_count_end - page_count_start,
         "processing_time": processing_end - processing_start,
         "total_api_time": api_end - api_start,
         "pages_processed": len(output),
