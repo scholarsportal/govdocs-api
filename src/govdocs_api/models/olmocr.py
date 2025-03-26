@@ -7,43 +7,45 @@ import gc
 from io import BytesIO
 from PIL import Image
 import base64
-import hashlib
-import atexit
+# import hashlib
+# import atexit
 from fastapi import FastAPI, APIRouter, HTTPException, BackgroundTasks
 from contextlib import asynccontextmanager
 from functools import partial, cache
 import time
-import httpx
-import asyncio
-from pypdf import PdfReader
-from tqdm import tqdm
-from dataclasses import dataclass
-from urllib.parse import urlparse
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
-from concurrent.futures.process import BrokenProcessPool
+# import httpx
+# import asyncio
+# from pypdf import PdfReader
+# from tqdm import tqdm
+# from dataclasses import dataclass
+# from urllib.parse import urlparse
+# from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
+# from concurrent.futures.process import BrokenProcessPool
 from typing import List, Dict, Any, Optional, Tuple
-import multiprocessing
-import logging
-import re
+# import multiprocessing
+# import logging
+# import re
 
-from olmocr.check import (
-    check_poppler_version,
-    check_sglang_version,
-    check_torch_gpu_available,
-)
-from olmocr.filter.filter import Language, PdfFilter
-from olmocr.metrics import MetricsKeeper, WorkerTracker
+# from olmocr.check import (
+#     check_poppler_version,
+#     check_sglang_version,
+#     check_torch_gpu_available,
+# )
+# from olmocr.filter.filter import Language, PdfFilter
+# from olmocr.metrics import MetricsKeeper, WorkerTracker
 from olmocr.prompts import PageResponse, build_finetuning_prompt
 from olmocr.prompts.anchor import get_anchor_text
-from olmocr.s3_utils import (
-    download_zstd_csv,
-    expand_s3_glob,
-    get_s3_bytes,
-    get_s3_bytes_with_backoff,
-    parse_s3_path,
-)
-from olmocr.version import VERSION
-from olmocr.work_queue import LocalWorkQueue, S3WorkQueue, WorkQueue
+# from olmocr.s3_utils import (
+#     download_zstd_csv,
+#     expand_s3_glob,
+#     get_s3_bytes,
+#     get_s3_bytes_with_backoff,
+#     parse_s3_path,
+# )
+# from olmocr.version import VERSION
+# from olmocr.work_queue import LocalWorkQueue, S3WorkQueue, WorkQueue
+from govdocs_api.supabase.db_functions import supabase
+import io
 
 
 model = None
@@ -896,24 +898,39 @@ olm_ocr = APIRouter(lifespan=lifespan)
 #             return None
 
 
-def process_page(page_num, pdf_path, temperature, dpi, max_new_tokens, num_return_sequences, device):
+def process_page(page_num, barcode, temperature, dpi, max_new_tokens, num_return_sequences, device):
     """Process a single page and return the OCR text with performance metrics."""
     perf_metrics = {}
     total_start = time.perf_counter()
     
     # Render page to an image
     render_start = time.perf_counter()
-    image_base64 = render_pdf_to_base64png(pdf_path, page_num, target_longest_image_dim=2048)
+    # image_base64 = render_pdf_to_base64png(pdf_path, page_num, target_longest_image_dim=2048)
+    try:
+        # Download image from Supabase Storage
+        response = (
+            supabase.storage
+            .from_("ia_bucket")
+            .download(f"{barcode}/{page_num}.png")
+        )
+
+        print(f"Downloaded image for barcode {barcode}, page {page_num}")
+
+        # Convert response bytes to base64
+        image_base64 = base64.b64encode(response).decode('utf-8')
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=f"Could not find image for barcode {barcode}, page {page_num}: {str(e)}")
     render_end = time.perf_counter()
     perf_metrics["render_time"] = render_end - render_start
     
     # Get anchor text
     anchor_start = time.perf_counter()
-    try:
-        anchor_text = get_anchor_text(pdf_path, page_num, pdf_engine="pdfreport", target_length=4000)
-        prompt = build_finetuning_prompt(anchor_text)
-    except:
-        prompt = ""
+    # try:
+    #     anchor_text = get_anchor_text(pdf_path, page_num, pdf_engine="pdfreport", target_length=4000)
+    #     prompt = build_finetuning_prompt(anchor_text)
+    # except:
+    #     prompt = ""
+    prompt = "Following is a scanned government document page. Return the text content of the page."
     anchor_end = time.perf_counter()
     perf_metrics["anchor_text_time"] = anchor_end - anchor_start
     
