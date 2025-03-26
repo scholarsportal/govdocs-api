@@ -79,7 +79,7 @@ async def tesseract_ocr_page(barcode: str, dpi: int = 256, first_page: int = 1, 
         page_images_with_numbers = []
         for page_num in range(first_page, last_page + 1):
             try:
-                # Download image from Supabase
+                # Download image from Supabase Storage
                 response = (
                     supabase.storage
                     .from_("ia_bucket")
