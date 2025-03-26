@@ -6,9 +6,9 @@ from typing import Optional
 import os
 
 ## IGNORE
-os.environ["TRANSFORMERS_CACHE"] = "/local/home/hfurquan/myProjects/Leaderboard/cache"
-os.environ["HF_HOME"] = "/local/home/hfurquan/myProjects/Leaderboard/cache"
-os.environ["CUDA_VISIBLE_DEVICES"] = "2,3"
+# os.environ["TRANSFORMERS_CACHE"] = "/local/home/hfurquan/myProjects/Leaderboard/cache"
+# os.environ["HF_HOME"] = "/local/home/hfurquan/myProjects/Leaderboard/cache"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "2,3"
 ##
 
 from govdocs_api.models.tesseract import tesseract
@@ -21,7 +21,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*", "http://localhost:8000", "0.0.0.0:8000", "http://0.0.0.0:8000", "http://127.0.0.1:8000"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -31,7 +31,7 @@ app.include_router(tesseract)
 app.include_router(marker)
 # app.include_router(olm_ocr)
 # app.include_router(smoldocling)
-# app.include_router(admin_router)
+app.include_router(admin_router)
 
 if __name__ == "__main__":
   import uvicorn

@@ -17,6 +17,7 @@ from supabase import create_client, Client
 from pydantic import BaseModel, Field
 import concurrent.futures
 from govdocs_api.utilities.pdf_utilities import render_pdf_to_base64png, total_pages
+from govdocs_api.supabase.db_functions import supabase
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -25,11 +26,11 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Initialize Supabase client
-supabase_url = os.environ.get("SUPABASE_URL")
-supabase_key = os.environ.get("SUPABASE_ANON_KEY")
-print(f'Supbase Url {supabase_url} Supabase Key {supabase_key}')
-supabase: Client = create_client(supabase_url, supabase_key) if supabase_url and supabase_key else None
+# # Initialize Supabase client
+# supabase_url = os.environ.get("SUPABASE_URL")
+# supabase_key = os.environ.get("SUPABASE_ANON_KEY")
+# print(f'Supbase Url {supabase_url} Supabase Key {supabase_key}')
+# supabase: Client = create_client(supabase_url, supabase_key) if supabase_url and supabase_key else None
 
 
 # Create a temporary directory for downloaded files
