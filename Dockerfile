@@ -29,7 +29,7 @@ RUN echo ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula selec
 # Add system dependencies for pdf utilities
 RUN apt-get update && apt-get install -y \
 poppler-utils \
-ttf-mscorefonts-installer \
+fonts-liberation \
 fonts-crosextra-caladea \
 fonts-crosextra-carlito \
 gsfonts \
