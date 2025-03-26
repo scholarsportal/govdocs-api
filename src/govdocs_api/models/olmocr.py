@@ -1074,26 +1074,26 @@ def olm(barcode: str, last_page: int, first_page: int = 1, temprature: float = 0
     }
 
 
-    # Use ThreadPoolExecutor since we're primarily I/O bound with the model inference
-    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-        # Create a partial function with the fixed parameters
-        process_func = partial(
-            process_page, 
-            pdf_path=pdf_path, 
-            temperature=temprature, 
-            dpi=dpi, 
-            max_new_tokens=max_new_tokens, 
-            num_return_sequences=num_return_sequences,
-            device=device
-        )
+    # # Use ThreadPoolExecutor since we're primarily I/O bound with the model inference
+    # with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+    #     # Create a partial function with the fixed parameters
+    #     process_func = partial(
+    #         process_page, 
+    #         pdf_path=pdf_path, 
+    #         temperature=temprature, 
+    #         dpi=dpi, 
+    #         max_new_tokens=max_new_tokens, 
+    #         num_return_sequences=num_return_sequences,
+    #         device=device
+    #     )
         
-        # Process all pages in parallel
-        for result in executor.map(process_func, range(3)): #num_pages for entire pdf
-            result_dict["pages"].append(result)
-            full_text += f"\n\n--- PAGE {result['page']} ---\n\n{result['text']}"
+    #     # Process all pages in parallel
+    #     for result in executor.map(process_func, range(3)): #num_pages for entire pdf
+    #         result_dict["pages"].append(result)
+    #         full_text += f"\n\n--- PAGE {result['page']} ---\n\n{result['text']}"
 
-    #Sort the pages by page number
-    result_dict["pages"] = sorted(result_dict["pages"], key=lambda x: x["page"])
-    result_dict["full_text"] = full_text
+    # #Sort the pages by page number
+    # result_dict["pages"] = sorted(result_dict["pages"], key=lambda x: x["page"])
+    # result_dict["full_text"] = full_text
     
-    return result_dict
+    # return result_dict

@@ -17,6 +17,8 @@ from typing import List, Dict, Any, Optional
 from functools import partial
 import concurrent.futures
 from govdocs_api.utilities.pdf_utilities import render_pdf_to_base64png, total_pages
+from govdocs_api.supabase.db_functions import supabase
+import io
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -44,20 +46,35 @@ async def lifespan(app: FastAPI):
 
 smoldocling = APIRouter(lifespan=lifespan)
 
-def process_page(page_num, pdf_path, target_longest_image_dim=1024, max_new_tokens=8192):
+def process_page(page_num,  barcode, target_longest_image_dim=1024, max_new_tokens=8192):
     """Process a single page and return the markdown text with performance metrics."""
     perf_metrics = {}
     total_start = time.perf_counter()
 
-    print(f"Rendering page_num: {page_num} of {pdf_path}")
+    #print(f"Rendering page_num: {page_num} of {pdf_path}")
     
     # Render page to an image
     render_start = time.perf_counter()
-    image_base64 = render_pdf_to_base64png(pdf_path, page_num, target_longest_image_dim=target_longest_image_dim)
-    image_bytes = base64.b64decode(image_base64)
-    image = Image.open(BytesIO(image_bytes))
+    # image_base64 = render_pdf_to_base64png(pdf_path, page_num, target_longest_image_dim=target_longest_image_dim)
+    # image_bytes = base64.b64decode(image_base64)
+    # image = Image.open(BytesIO(image_bytes))
+    try:
+        # Download image from Supabase Storage
+        response = (
+            supabase.storage
+            .from_("ia_bucket")
+            .download(f"{barcode}/{page_num}.png")
+        )
+
+        print(f"Downloaded image for barcode {barcode}, page {page_num}")
+        
+        # Convert response to PIL Image
+        image = Image.open(io.BytesIO(response))
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=f"Could not find image for barcode {barcode}, page {page_num}: {str(e)}")
+    
     render_end = time.perf_counter()
-    perf_metrics["render_time"] = render_end - render_start
+    perf_metrics["download_time"] = render_end - render_start
     
     # Build the messages
     prep_start = time.perf_counter()
@@ -117,9 +134,9 @@ def process_page(page_num, pdf_path, target_longest_image_dim=1024, max_new_toke
 
 @smoldocling.get("/smoldocling")
 def smoldocling_ocr(
-    pdf_path: str, 
+    barcode: str, 
+    last_page: int, 
     first_page: int = 1, 
-    last_page: int = None, 
     max_pages: int = 3,
     target_image_dim: int = 1024, 
     max_new_tokens: int = 8192
@@ -128,7 +145,7 @@ def smoldocling_ocr(
     Perform OCR on a PDF using SmolDocling and return markdown text.
     
     Args:
-        pdf_path: Path to the PDF file
+        barcode: Barcode identifier for the document
         first_page: First page number to OCR (1-based index)
         last_page: Last page number to OCR (1-based index)
         max_pages: Maximum number of pages to process
@@ -140,35 +157,35 @@ def smoldocling_ocr(
     """
     api_start = time.perf_counter()
     
-    # Locate the PDF file
-    pdf_locate_start = time.perf_counter()
-    try:
-        script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        pdf_path = os.path.join(script_dir, "pdfs", pdf_path)
-        if not os.path.exists(pdf_path):
-            raise HTTPException(status_code=404, detail=f"PDF file not found: {pdf_path}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Error locating PDF: " + str(e))
-    pdf_locate_end = time.perf_counter()
+    # # Locate the PDF file
+    # pdf_locate_start = time.perf_counter()
+    # try:
+    #     script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    #     pdf_path = os.path.join(script_dir, "pdfs", pdf_path)
+    #     if not os.path.exists(pdf_path):
+    #         raise HTTPException(status_code=404, detail=f"PDF file not found: {pdf_path}")
+    # except Exception as e:
+    #     raise HTTPException(status_code=500, detail="Error locating PDF: " + str(e))
+    # pdf_locate_end = time.perf_counter()
     
     # Get the number of pages in the PDF
-    page_count_start = time.perf_counter()
-    try:
-        num_pages = total_pages(pdf_path)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Error counting PDF pages: " + str(e))
-    page_count_end = time.perf_counter()
+    # page_count_start = time.perf_counter()
+    # try:
+    #     num_pages = total_pages(pdf_path)
+    # except Exception as e:
+    #     raise HTTPException(status_code=500, detail="Error counting PDF pages: " + str(e))
+    # page_count_end = time.perf_counter()
     
     # Adjust page range
     first_page = max(1, first_page)
-    if last_page is None or last_page > num_pages:
-        last_page = min(num_pages, first_page + max_pages - 1)
+    # if last_page is None or last_page > num_pages:
+    #     last_page = min(num_pages, first_page + max_pages - 1)
     
     # Convert to 0-based indexing for internal use
     pages_to_process = range(first_page, last_page + 1)
 
-    print(f"pages_to_process: {pages_to_process}")
-    print(f"len(pages_to_process): {len(pages_to_process)}")
+    # print(f"pages_to_process: {pages_to_process}")
+    # print(f"len(pages_to_process): {len(pages_to_process)}")
     
     
     # Process pages
@@ -180,7 +197,7 @@ def smoldocling_ocr(
         # Create a partial function with fixed parameters
         process_func = partial(
             process_page,
-            pdf_path=pdf_path,
+            barcode=barcode,
             target_longest_image_dim=target_image_dim,
             max_new_tokens=max_new_tokens
         )
@@ -216,8 +233,8 @@ def smoldocling_ocr(
     # Calculate performance metrics
     api_end = time.perf_counter()
     performance_summary = {
-        "pdf_location_time": pdf_locate_end - pdf_locate_start,
-        "page_counting_time": page_count_end - page_count_start,
+        # "pdf_location_time": pdf_locate_end - pdf_locate_start,
+        # "page_counting_time": page_count_end - page_count_start,
         "processing_time": processing_end - processing_start,
         "total_api_time": api_end - api_start,
         "pages_processed": len(results),
