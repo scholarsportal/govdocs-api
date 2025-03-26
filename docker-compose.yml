@@ -5,6 +5,9 @@ services:
       context: .
     ports:
       - 8000:8000
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDEVMODE=1  # Enables additional debugging information
     deploy:
       resources:
         reservations:
@@ -12,3 +15,12 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
+    # network_mode: host
+    volumes:
+      - govdocs-api:/app
+      - models:/.cache/huggingface
+#    runtime: nvidia -> Install nvidia-container toolkit to run models on GPU
+
+volumes:
+  govdocs-api:
+  models:
