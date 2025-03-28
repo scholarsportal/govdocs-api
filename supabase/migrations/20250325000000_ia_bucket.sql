@@ -30,23 +30,23 @@ values ('ia_bucket', 'ia_bucket', true);
 
 -- Temporary changes, prod should use above policies
 create policy "Admin users can upload to ia_bucket"
-on storage.objects for insert to authenticated with check (
+on storage.objects for insert to authenticated, anon with check (
   bucket_id = 'ia_bucket' 
 );
 
 create policy "Admin users can update in ia_bucket"
-on storage.objects for update to authenticated using (
+on storage.objects for update to authenticated, anon using (
   bucket_id = 'ia_bucket' 
 );
 
 create policy "Admin users can delete from ia_bucket"
-on storage.objects for delete to authenticated using (
+on storage.objects for delete to authenticated, anon using (
   bucket_id = 'ia_bucket'
 );
 
 -- Anyone can view the rendered images
 create policy "Anyone can view ia_bucket"
-on storage.objects for select to authenticated using (
+on storage.objects for select to authenticated, anon using (
   bucket_id = 'ia_bucket'
 );
 

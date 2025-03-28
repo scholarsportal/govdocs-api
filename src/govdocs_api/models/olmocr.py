@@ -7,43 +7,45 @@ import gc
 from io import BytesIO
 from PIL import Image
 import base64
-import hashlib
-import atexit
+# import hashlib
+# import atexit
 from fastapi import FastAPI, APIRouter, HTTPException, BackgroundTasks
 from contextlib import asynccontextmanager
 from functools import partial, cache
 import time
-import httpx
-import asyncio
-from pypdf import PdfReader
-from tqdm import tqdm
-from dataclasses import dataclass
-from urllib.parse import urlparse
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
-from concurrent.futures.process import BrokenProcessPool
+# import httpx
+# import asyncio
+# from pypdf import PdfReader
+# from tqdm import tqdm
+# from dataclasses import dataclass
+# from urllib.parse import urlparse
+# from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
+# from concurrent.futures.process import BrokenProcessPool
 from typing import List, Dict, Any, Optional, Tuple
-import multiprocessing
-import logging
-import re
+# import multiprocessing
+# import logging
+# import re
 
-from olmocr.check import (
-    check_poppler_version,
-    check_sglang_version,
-    check_torch_gpu_available,
-)
-from olmocr.filter.filter import Language, PdfFilter
-from olmocr.metrics import MetricsKeeper, WorkerTracker
+# from olmocr.check import (
+#     check_poppler_version,
+#     check_sglang_version,
+#     check_torch_gpu_available,
+# )
+# from olmocr.filter.filter import Language, PdfFilter
+# from olmocr.metrics import MetricsKeeper, WorkerTracker
 from olmocr.prompts import PageResponse, build_finetuning_prompt
 from olmocr.prompts.anchor import get_anchor_text
-from olmocr.s3_utils import (
-    download_zstd_csv,
-    expand_s3_glob,
-    get_s3_bytes,
-    get_s3_bytes_with_backoff,
-    parse_s3_path,
-)
-from olmocr.version import VERSION
-from olmocr.work_queue import LocalWorkQueue, S3WorkQueue, WorkQueue
+# from olmocr.s3_utils import (
+#     download_zstd_csv,
+#     expand_s3_glob,
+#     get_s3_bytes,
+#     get_s3_bytes_with_backoff,
+#     parse_s3_path,
+# )
+# from olmocr.version import VERSION
+# from olmocr.work_queue import LocalWorkQueue, S3WorkQueue, WorkQueue
+from govdocs_api.supabase.db_functions import supabase
+import io
 
 
 model = None
@@ -896,24 +898,39 @@ olm_ocr = APIRouter(lifespan=lifespan)
 #             return None
 
 
-def process_page(page_num, pdf_path, temperature, dpi, max_new_tokens, num_return_sequences, device):
+def process_page(page_num, barcode, temperature, dpi, max_new_tokens, num_return_sequences, device):
     """Process a single page and return the OCR text with performance metrics."""
     perf_metrics = {}
     total_start = time.perf_counter()
     
     # Render page to an image
     render_start = time.perf_counter()
-    image_base64 = render_pdf_to_base64png(pdf_path, page_num, target_longest_image_dim=2048)
+    # image_base64 = render_pdf_to_base64png(pdf_path, page_num, target_longest_image_dim=2048)
+    try:
+        # Download image from Supabase Storage
+        response = (
+            supabase.storage
+            .from_("ia_bucket")
+            .download(f"{barcode}/{page_num}.png")
+        )
+
+        print(f"Downloaded image for barcode {barcode}, page {page_num}")
+
+        # Convert response bytes to base64
+        image_base64 = base64.b64encode(response).decode('utf-8')
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=f"Could not find image for barcode {barcode}, page {page_num}: {str(e)}")
     render_end = time.perf_counter()
     perf_metrics["render_time"] = render_end - render_start
     
     # Get anchor text
     anchor_start = time.perf_counter()
-    try:
-        anchor_text = get_anchor_text(pdf_path, page_num, pdf_engine="pdfreport", target_length=4000)
-        prompt = build_finetuning_prompt(anchor_text)
-    except:
-        prompt = ""
+    # try:
+    #     anchor_text = get_anchor_text(pdf_path, page_num, pdf_engine="pdfreport", target_length=4000)
+    #     prompt = build_finetuning_prompt(anchor_text)
+    # except:
+    #     prompt = ""
+    prompt = "Following is a scanned government document page. Return the text content of the page."
     anchor_end = time.perf_counter()
     perf_metrics["anchor_text_time"] = anchor_end - anchor_start
     
@@ -979,12 +996,12 @@ def process_page(page_num, pdf_path, temperature, dpi, max_new_tokens, num_retur
     }
 
 @olm_ocr.get("/olmocr")
-def olm(pdf_path: str, first_page: int = 1, last_page: int = None, temprature: float = 0.9, dpi:int = 256, max_new_tokens: int = 5000, num_return_sequences: int = 1):
+def olm(barcode: str, last_page: int, first_page: int = 1, temprature: float = 0.9, dpi:int = 256, max_new_tokens: int = 5000, num_return_sequences: int = 1):
     """
     Perform OCR on a specific page of the given PDF using Tesseract.
     
     Args:
-        pdf_path: Path to the PDF file
+        barcode: Barcode identifier for the document
         first_page: First Page number to OCR (1-based index)
         last_page: Last Page number to OCR (1-based index)
         temprature: The value used to control the randomness of the generated text
@@ -996,21 +1013,21 @@ def olm(pdf_path: str, first_page: int = 1, last_page: int = None, temprature: f
     """
     api_start = time.perf_counter()
     
-    # Locate the PDF file
-    pdf_locate_start = time.perf_counter()
-    try:
-        script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        pdf_path = os.path.join(script_dir, "pdfs", pdf_path)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Error rendering PDF: " + str(e))
-    pdf_locate_end = time.perf_counter()
+    # # Locate the PDF file
+    # pdf_locate_start = time.perf_counter()
+    # try:
+    #     script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    #     pdf_path = os.path.join(script_dir, "pdfs", pdf_path)
+    # except Exception as e:
+    #     raise HTTPException(status_code=500, detail="Error rendering PDF: " + str(e))
+    # pdf_locate_end = time.perf_counter()
     
     # Get the number of pages in the PDF
-    page_count_start = time.perf_counter()
-    num_pages = total_pages(pdf_path)
-    page_count_end = time.perf_counter()
+    # page_count_start = time.perf_counter()
+    # num_pages = total_pages(pdf_path)
+    # page_count_end = time.perf_counter()
 
-    print(f"Total number of pages of {pdf_path}: {num_pages}")
+    #print(f"Total number of pages of {pdf_path}: {num_pages}")
     
     # Configure processing parameters
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -1018,11 +1035,11 @@ def olm(pdf_path: str, first_page: int = 1, last_page: int = None, temprature: f
 
     # Process pages
     processing_start = time.perf_counter()
-    for page in range(1, 4):  # num_pages
+    for page in range(first_page, last_page + 1):  # num_pages
         page_start = time.perf_counter()
         output.append(process_page(
             page_num=page,
-            pdf_path=pdf_path, 
+            barcode=barcode, 
             temperature=temprature, 
             dpi=dpi, 
             max_new_tokens=max_new_tokens, 
@@ -1042,8 +1059,8 @@ def olm(pdf_path: str, first_page: int = 1, last_page: int = None, temprature: f
     
     # Add overall performance metrics
     performance_summary = {
-        "pdf_location_time": pdf_locate_end - pdf_locate_start,
-        "page_counting_time": page_count_end - page_count_start,
+        # "pdf_location_time": pdf_locate_end - pdf_locate_start,
+        # "page_counting_time": page_count_end - page_count_start,
         "processing_time": processing_end - processing_start,
         "total_api_time": api_end - api_start,
         "pages_processed": len(output),
@@ -1057,26 +1074,26 @@ def olm(pdf_path: str, first_page: int = 1, last_page: int = None, temprature: f
     }
 
 
-    # Use ThreadPoolExecutor since we're primarily I/O bound with the model inference
-    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-        # Create a partial function with the fixed parameters
-        process_func = partial(
-            process_page, 
-            pdf_path=pdf_path, 
-            temperature=temprature, 
-            dpi=dpi, 
-            max_new_tokens=max_new_tokens, 
-            num_return_sequences=num_return_sequences,
-            device=device
-        )
+    # # Use ThreadPoolExecutor since we're primarily I/O bound with the model inference
+    # with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+    #     # Create a partial function with the fixed parameters
+    #     process_func = partial(
+    #         process_page, 
+    #         pdf_path=pdf_path, 
+    #         temperature=temprature, 
+    #         dpi=dpi, 
+    #         max_new_tokens=max_new_tokens, 
+    #         num_return_sequences=num_return_sequences,
+    #         device=device
+    #     )
         
-        # Process all pages in parallel
-        for result in executor.map(process_func, range(3)): #num_pages for entire pdf
-            result_dict["pages"].append(result)
-            full_text += f"\n\n--- PAGE {result['page']} ---\n\n{result['text']}"
+    #     # Process all pages in parallel
+    #     for result in executor.map(process_func, range(3)): #num_pages for entire pdf
+    #         result_dict["pages"].append(result)
+    #         full_text += f"\n\n--- PAGE {result['page']} ---\n\n{result['text']}"
 
-    #Sort the pages by page number
-    result_dict["pages"] = sorted(result_dict["pages"], key=lambda x: x["page"])
-    result_dict["full_text"] = full_text
+    # #Sort the pages by page number
+    # result_dict["pages"] = sorted(result_dict["pages"], key=lambda x: x["page"])
+    # result_dict["full_text"] = full_text
     
-    return result_dict
+    # return result_dict
