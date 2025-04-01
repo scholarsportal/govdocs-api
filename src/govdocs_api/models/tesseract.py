@@ -11,12 +11,13 @@ import numpy as np
 from govdocs_api.utilities.pdf_utilities import MAX_WORKERS,  extract_images_from_pdf
 import io
 from govdocs_api.supabase.db_functions import supabase
+from functools import partial
 
 
 
 tesseract = APIRouter()
 
-DPI = 256
+# DPI = 256
 CONTRAST = 1.1
 LANG = "eng+fra"
 
@@ -29,7 +30,7 @@ def remove_bleed_through(image):
     smoothed = cv2.medianBlur(denoised, 1)
     return smoothed
 
-def ocr_page(image_tuple : tuple[Image.Image, int]) -> dict:
+def ocr_page(image_tuple : tuple[Image.Image, int], dpi: int) -> dict:
     image, page_num = image_tuple
     # adjust exposure
     if CONTRAST != 1.0:
@@ -42,8 +43,10 @@ def ocr_page(image_tuple : tuple[Image.Image, int]) -> dict:
     # remove noise
     denoised_image = remove_bleed_through(np.array(contrasted_image))
     processed_image = Image.fromarray(denoised_image)
-    processed_image.info['dpi'] = (DPI, DPI)
-    ocr_text = pytesseract.image_to_string(processed_image, lang=LANG, config=f"--dpi {DPI}")
+    #processed_image.save(f'./{dpi}.png')
+    print(f'Performing tesseract OCR with DPI: {dpi}')
+    processed_image.info['dpi'] = (dpi, dpi)
+    ocr_text = pytesseract.image_to_string(processed_image, lang=LANG, config=f"--dpi {dpi}")
     return {"text": ocr_text, "page_number": page_num}
 
 
@@ -95,8 +98,9 @@ async def tesseract_ocr_page(barcode: str, dpi: int = 256, first_page: int = 1, 
                 raise HTTPException(status_code=404, detail=f"Could not find image for barcode {barcode}, page {page_num}: {str(e)}")
         
         # Perform OCR on the downloaded images
+        ocr_with_dpi = partial(ocr_page, dpi=dpi)
         with ProcessPoolExecutor(max_workers=MAX_WORKERS) as executor:
-            ocr_texts = list(executor.map(ocr_page, page_images_with_numbers))
+            ocr_texts = list(executor.map(ocr_with_dpi, page_images_with_numbers))
         
         ocr_texts.sort(key=lambda x: x['page_number'])
         

@@ -990,7 +990,7 @@ def process_page(page_num, barcode, temperature, dpi, max_new_tokens, num_return
     perf_metrics["total_time"] = total_end - total_start
     
     return {
-        "page_number": page_num + 1, 
+        "page_number": page_num, 
         "text": page_text,
         "performance": perf_metrics
     }
