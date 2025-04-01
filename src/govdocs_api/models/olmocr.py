@@ -921,7 +921,7 @@ def process_page(page_num, barcode, temperature, dpi, max_new_tokens, num_return
     except Exception as e:
         raise HTTPException(status_code=404, detail=f"Could not find image for barcode {barcode}, page {page_num}: {str(e)}")
     render_end = time.perf_counter()
-    perf_metrics["render_time"] = render_end - render_start
+    perf_metrics["download_time"] = render_end - render_start
     
     # Get anchor text
     anchor_start = time.perf_counter()

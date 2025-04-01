@@ -158,22 +158,24 @@ async def _convert_pdf(params: CommonParams) -> HTMLResponse:
 
 @marker.get("/marker")
 async def convert_pdf(
-    filepath: str,
+    #filepath: str,
+    barcode: int,
     page_range: str,
     languages: Optional[str] = None,
     force_ocr: bool = False,
     paginate_output: bool = False,
     output_format: str = "html"
 ): 
-    try:
-        script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        pdf_path = os.path.join(script_dir, "pdfs", filepath)
-        #images = [render_pdf_to_base64png(local_pdf_path=pdf_path, page_num=page_number, target_longest_image_dim=1024)]
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Error rendering PDF: " + str(e) )
+    # try:
+    #     script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    #     pdf_path = os.path.join(script_dir, "pdfs", filepath)
+    #     #images = [render_pdf_to_base64png(local_pdf_path=pdf_path, page_num=page_number, target_longest_image_dim=1024)]
+    # except Exception as e:
+    #     raise HTTPException(status_code=500, detail="Error rendering PDF: " + str(e) )
 
     params = CommonParams(
-        filepath=pdf_path,
+        #filepath=pdf_path,
+        barcode = barcode,
         page_range=page_range,
         languages=languages,
         force_ocr=force_ocr,
