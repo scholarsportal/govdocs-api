@@ -31,6 +31,7 @@ ipykernel = "^6.29.5"
 sentencepiece = "^0.2.0"
 supabase = "^2.14.0"
 python-dotenv = "^1.0.1"
+img2pdf = "^0.6.0"
 
 [[tool.poetry.source]]
 name = "pytorch"

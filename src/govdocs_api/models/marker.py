@@ -1,38 +1,3 @@
-# For marker OCR
-from marker.converters.pdf import PdfConverter
-from marker.models import create_model_dict
-from marker.output import text_from_rendered
-import os
-
-# Marker OCR implementation
-def marker_ocr(pdf_path, output_dir):
-    output_file = os.path.join(output_dir, 'marker_output.txt')
-    output_md_file = os.path.join(output_dir, 'marker_output.md')
-    os.makedirs(output_dir, exist_ok=True)
-    
-    converter = PdfConverter(
-        artifact_dict=create_model_dict(),
-    )
-    
-    rendered = converter(pdf_path)
-    text,_, images = text_from_rendered(rendered)
-    
-    # Save the markdown text
-    with open(output_md_file, 'w', encoding='utf-8') as f:
-        f.write(text)
-    
-    # Save a plain text version
-    with open(output_file, 'w', encoding='utf-8') as f:
-        f.write(text)
-    
-    # Save images
-    for key, img in images.items():
-        img_path = os.path.join(output_dir, key)
-        img.save(img_path)
-    
-    return text
-
-
 import traceback
 
 import click
@@ -53,6 +18,9 @@ from fastapi import APIRouter, FastAPI, Form, File, HTTPException, UploadFile
 from marker.converters.pdf import PdfConverter
 from marker.models import create_model_dict
 from marker.settings import settings
+from govdocs_api.supabase.db_functions import supabase
+import tempfile
+import img2pdf
 
 app_data = {}
 
@@ -117,6 +85,65 @@ class CommonParams(BaseModel):
 
 async def _convert_pdf(params: CommonParams) -> HTMLResponse: 
     assert params.output_format in ["markdown", "json", "html"], "Invalid output format"
+    
+    # Parse the page_range string to get all page numbers
+    page_numbers = []
+    if params.page_range:
+        parts = params.page_range.split(',')
+        for part in parts:
+            if '-' in part:
+                # Handle range like "1-5"
+                start, end = map(int, part.split('-'))
+                page_numbers.extend(range(start, end + 1))
+            else:
+                # Handle individual page like "1"
+                try:
+                    page_numbers.append(int(part))
+                except ValueError:
+                    raise HTTPException(status_code=400, detail=f"Invalid page number in page range: {part}")
+
+    # Sort the page numbers
+    page_numbers.sort()
+
+    # Create a temporary directory for the downloaded images
+    temp_dir = tempfile.mkdtemp()
+    print(f"Created temporary directory: {temp_dir}")
+
+    # Disable tokenizers parallelism to avoid warnings
+    os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
+    # Download each page and save to the temp directory
+    image_paths = []
+    for page_num in page_numbers:
+        try:
+            # Download image from Supabase Storage
+            response = (
+                supabase.storage
+                .from_("ia_bucket")
+                .download(f"{params.barcode}/{page_num}.png")
+            )
+
+            print(f"Downloaded image for barcode {params.barcode}, page {page_num}")
+
+            # Save the image to a file in the temp directory
+            image_path = os.path.join(temp_dir, f"{page_num}.png")
+            with open(image_path, "wb") as f:
+                f.write(response)
+            
+            image_paths.append(image_path)
+            print(f"Saved image to {image_path}")
+        except Exception as e:
+            raise HTTPException(status_code=404, detail=f"Could not find image for barcode {params.barcode}, page {page_num}: {str(e)}")
+
+    # For PDF converter, we need to convert images to a single PDF
+    pdf_path = os.path.join(temp_dir, f"{params.barcode}.pdf")
+    try:
+        with open(pdf_path, "wb") as f:
+            f.write(img2pdf.convert(image_paths))
+        params.filepath = pdf_path
+        print(f"Created PDF at {pdf_path}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create PDF: {str(e)}")
     try:
         options = params.model_dump()
         print(options)
@@ -140,20 +167,16 @@ async def _convert_pdf(params: CommonParams) -> HTMLResponse:
             "success": False,
             "error": str(e),
         }
+    finally:
+        if os.path.exists(temp_dir):
+            os.rmdir(temp_dir)
 
     encoded = {}
     for k, v in images.items():
         byte_stream = io.BytesIO()
         v.save(byte_stream, format=settings.OUTPUT_IMAGE_FORMAT)
         encoded[k] = base64.b64encode(byte_stream.getvalue()).decode(settings.OUTPUT_ENCODING)
-
-    # return {
-    #     "format": params.output_format,
-    #     "output": text,
-    #     "images": encoded,
-    #     "metadata": metadata,
-    #     "success": True,
-    # }
+        
     return text
 
 @marker.get("/marker")
