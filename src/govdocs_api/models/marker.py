@@ -176,7 +176,7 @@ async def _convert_pdf(params: CommonParams) -> HTMLResponse:
         byte_stream = io.BytesIO()
         v.save(byte_stream, format=settings.OUTPUT_IMAGE_FORMAT)
         encoded[k] = base64.b64encode(byte_stream.getvalue()).decode(settings.OUTPUT_ENCODING)
-        
+
     return text
 
 @marker.get("/marker")
@@ -203,7 +203,10 @@ async def convert_pdf(
         languages=languages,
         force_ocr=force_ocr,
         paginate_output=paginate_output,
-        output_format=output_format
+        output_format=output_format,
+        llm_service="marker.services.claude.ClaudeService",
+        claude_api_key=os.getenv("CLAUDE_API_KEY"),
+        claude_model=os.getenv("CLAUDE_MODEL")
     )
     return await _convert_pdf(params)
 
