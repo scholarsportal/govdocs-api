@@ -46,7 +46,7 @@ async def lifespan(app: FastAPI):
 
 smoldocling = APIRouter(lifespan=lifespan)
 
-def process_page(page_num,  barcode, target_longest_image_dim=1024, max_new_tokens=8192):
+def process_page(page_num : int,  barcode: int, target_longest_image_dim: int =1024, max_new_tokens : int =8192):
     """Process a single page and return the markdown text with performance metrics."""
     perf_metrics = {}
     total_start = time.perf_counter()
@@ -113,7 +113,7 @@ def process_page(page_num,  barcode, target_longest_image_dim=1024, max_new_toke
     # Create Docling document
     try:
         doctags_doc = DocTagsDocument.from_doctags_and_image_pairs([doctags], [image])
-        doc = DoclingDocument(name=f"Page {page_num+1}")
+        doc = DoclingDocument(name=f"Page {page_num}")
         doc.load_from_doctags(doctags_doc)
         markdown_text = doc.export_to_markdown()
     except Exception as e:
@@ -126,7 +126,7 @@ def process_page(page_num,  barcode, target_longest_image_dim=1024, max_new_toke
     perf_metrics["total_time"] = total_end - total_start
     
     return {
-        "page_number": page_num + 1, 
+        "page_number": page_num, 
         "markdown": markdown_text,
         "raw_doctags": doctags,
         "performance": perf_metrics
