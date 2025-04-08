@@ -8,21 +8,15 @@ services:
     env_file:
       - .env
     environment:
-      - PYTHONUNBUFFERED=1
-      - PYTHONDEVMODE=1  # Enables additional debugging information
       - HF_HOME=/app/models
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-    # network_mode: host
     volumes:
-      - ./src/govdocs_api:/app/src/govdocs_api
-      - models:/app/models 
-#    runtime: nvidia -> Install nvidia-container toolkit to run models on GPU
-
-volumes:
-  models:
+      - ./models:/app/models 
+    network_mode: host
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+    # runtime: nvidia -> Install nvidia-container toolkit to run models on GPU

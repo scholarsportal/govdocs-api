@@ -20,3 +20,9 @@ variables:
 
   # configure auto devops components
   REVIEW_DISABLED: 1
+
+deploy:
+  stage: production
+  image: "registry.gitlab.com/gitlab-org/cluster-integration/auto-deploy-image:latest"
+  script:
+    - echo "skip this step for now"
