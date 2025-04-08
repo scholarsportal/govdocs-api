@@ -36,7 +36,7 @@ img2pdf = "^0.6.0"
 [[tool.poetry.source]]
 name = "pytorch"
 url = "https://download.pytorch.org/whl/cu124"
-priority = "supplemental"
+priority = "explicit"
 
 [build-system]
 requires = ["poetry-core"]
