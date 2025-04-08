@@ -19,7 +19,4 @@ variables:
   TEST_DISABLED: 1
 
   # configure auto devops components
-  POSTGRES_ENABLED: 'false'
   REVIEW_DISABLED: 1
-  STAGING_ENABLED: 0
-  PRODUCTION_ENABLED: 0

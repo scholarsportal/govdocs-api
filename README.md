@@ -2,7 +2,7 @@
 
 > The backend API for evaluating OCR performance on government documents.
 
-[![Python 3.10+](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.11+](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.103.1-009688.svg)](https://fastapi.tiangolo.com)
 [![Poetry](https://img.shields.io/badge/Poetry-1.6.1-4B8BBE.svg)](https://python-poetry.org/)
 
@@ -25,10 +25,9 @@ The API supports the following OCR engines:
 
 ### Prerequisites
 
-- Python 3.10 or later
+- Python 3.11 or later
 - Git
-- [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started) for local setup OR [free tier](https://supabase.com/pricing) supabase cloud offering
-- GPU recommended for AI-based OCR models
+- GPU recommended for some OCR models
 
 ### 📦 Installation
 
@@ -56,6 +55,7 @@ sudo apt-get install -y \
     gsfonts \
     lcdf-typetools
 ```
+
 </details>
 
 <details>
@@ -69,6 +69,7 @@ sudo apt-get install -y \
 2. **Install Tesseract OCR**:
    - Follow instructions at [UB-Mannheim/tesseract](https://github.com/UB-Mannheim/tesseract/wiki)
    - Add Tesseract to your system PATH
+
 </details>
 
 <details>
@@ -77,6 +78,7 @@ sudo apt-get install -y \
 ```bash
 brew install poppler tesseract
 ```
+
 </details>
 
 #### Step 3: Install Poetry
@@ -89,6 +91,7 @@ Poetry is used for dependency management and packaging in Python.
 ```bash
 curl -sSL https://install.python-poetry.org | python3 -
 ```
+
 </details>
 
 <details>
@@ -97,10 +100,12 @@ curl -sSL https://install.python-poetry.org | python3 -
 ```powershell
 (Invoke-WebRequest -Uri https://install.python-poetry.org -UseBasicParsing).Content | py -
 ```
+
 If you installed Python through the Microsoft Store, use `python` instead of `py`.
 </details>
 
 Make sure Poetry is in your PATH:
+
 - Unix: `$HOME/.local/bin`
 - Windows: `%APPDATA%\Python\Scripts`
 
@@ -112,28 +117,31 @@ poetry install
 
 ### ⚙️ Configuration
 
+1. Set up Supabase:
+
+Ensure Supabase is up and running as described in the Supabase project [here](https://gitlab.scholarsportal.info/ai-ml/supabase).
+
 1. Create a `.env` file from the example:
-   ```bash
-   cp .env.example .env
-   ```
 
-2. Set up Supabase:
-   ```bash
-   # Install Supabase CLI first: https://supabase.com/docs/guides/local-development/cli/getting-started
-   supabase start
-   ```
+```bash
+cp .env.example .env
+```
 
-3. Update your `.env` file with the Supabase API URL and anon key displayed after running `supabase start`
+1. Update your `.env` file with the Supabase API URL and anon key displayed after running `supabase start` from the Supabase project.
 
 ### 🚀 Running the API
 
 #### Local Development
 
-```bash
-# Development mode with auto-reload
-poetry run fastapi dev src/govdocs_api/server.py
+Includes change tracking.
 
-# Production mode
+```bash
+poetry run fastapi dev src/govdocs_api/server.py
+```
+
+#### Production
+
+```bash
 poetry run fastapi run src/govdocs_api/server.py
 ```
 
