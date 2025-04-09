@@ -21,6 +21,7 @@ from marker.settings import settings
 from govdocs_api.supabase.db_functions import supabase
 import tempfile
 import img2pdf
+import shutil
 
 app_data = {}
 
@@ -54,9 +55,12 @@ async def root():
 
 
 class CommonParams(BaseModel):
-    filepath: Annotated[
-        Optional[str], Field(description="The path to the PDF file to convert.")
+    barcode: Annotated[
+        Optional[int], Field(description="Barcode for the PDF")
     ]
+    filepath: Annotated[
+        Optional[str], Field(description="The filepath for the temporary PDF.")
+    ] = None
     page_range: Annotated[
         Optional[str],
         Field(description="Page range to convert, specify comma separated page numbers or ranges.  Example: 0,5-10,20", example=None)
@@ -81,24 +85,33 @@ class CommonParams(BaseModel):
         str,
         Field(description="The format to output the text in.  Can be 'markdown', 'json', or 'html'.  Defaults to 'markdown'.")
     ] = "markdown"
+    llm_service: Annotated[
+        str,
+        Field(description="The LLM service to use for parsing ocr")
+    ] = "marker.services.claude.ClaudeService"
 
 
 async def _convert_pdf(params: CommonParams) -> HTMLResponse: 
     assert params.output_format in ["markdown", "json", "html"], "Invalid output format"
+
+    claude_api_key=os.getenv("CLAUDE_API_KEY")
+    claude_model=os.getenv("CLAUDE_MODEL")
     
     # Parse the page_range string to get all page numbers
     page_numbers = []
+    # When constructing page numbers, translate from user-provided numbers to 0-indexed
     if params.page_range:
         parts = params.page_range.split(',')
         for part in parts:
             if '-' in part:
                 # Handle range like "1-5"
                 start, end = map(int, part.split('-'))
-                page_numbers.extend(range(start, end + 1))
+    
+                page_numbers.extend(range(start, end))
             else:
                 # Handle individual page like "1"
                 try:
-                    page_numbers.append(int(part))
+                    page_numbers.append(int(part)) 
                 except ValueError:
                     raise HTTPException(status_code=400, detail=f"Invalid page number in page range: {part}")
 
@@ -145,6 +158,7 @@ async def _convert_pdf(params: CommonParams) -> HTMLResponse:
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create PDF: {str(e)}")
     try:
+        params.page_range = None
         options = params.model_dump()
         print(options)
         config_parser = ConfigParser(options)
@@ -169,7 +183,7 @@ async def _convert_pdf(params: CommonParams) -> HTMLResponse:
         }
     finally:
         if os.path.exists(temp_dir):
-            os.rmdir(temp_dir)
+            shutil.rmtree(temp_dir)
 
     encoded = {}
     for k, v in images.items():
@@ -204,9 +218,7 @@ async def convert_pdf(
         force_ocr=force_ocr,
         paginate_output=paginate_output,
         output_format=output_format,
-        llm_service="marker.services.claude.ClaudeService",
-        claude_api_key=os.getenv("CLAUDE_API_KEY"),
-        claude_model=os.getenv("CLAUDE_MODEL")
+        llm_service="marker.services.claude.ClaudeService"
     )
     return await _convert_pdf(params)
 
@@ -234,7 +246,7 @@ async def convert_pdf_upload(
         languages=languages,
         force_ocr=force_ocr,
         paginate_output=paginate_output,
-        output_format=output_format,
+        output_format=output_format
     )
     results = await _convert_pdf(params)
     os.remove(upload_path)
