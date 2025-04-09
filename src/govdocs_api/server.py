@@ -1,6 +1,7 @@
 from govdocs_api.administrative.admin import admin_router
 from govdocs_api.models.smoldocling import smoldocling
 from govdocs_api.models.olmocr import olm_ocr
+from govdocs_api.models.rolmocr import rolmocr
 from govdocs_api.models.marker import marker
 from govdocs_api.models.tesseract import tesseract
 from fastapi.middleware.cors import CORSMiddleware
@@ -30,5 +31,6 @@ app.add_middleware(
 app.include_router(tesseract)
 app.include_router(marker)
 app.include_router(olm_ocr)
+app.include_router(rolmocr)
 app.include_router(smoldocling)
 app.include_router(admin_router)

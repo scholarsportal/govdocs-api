@@ -29,6 +29,8 @@
     "pypdf",
     "pytesseract",
     "pytest",
+    "rolm",
+    "rolmocr",
     "sentencepiece",
     "smoldocling",
     "Supabase",
