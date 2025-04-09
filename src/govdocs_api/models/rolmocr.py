@@ -1,54 +1,41 @@
-from transformers import Qwen2VLForConditionalGeneration, AutoProcessor
-from govdocs_api.utilities.pdf_utilities import render_pdf_to_base64png, total_pages
-import os
-import torch
-import json
-import gc
-from io import BytesIO
-from PIL import Image
-import base64
-from fastapi import FastAPI, APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, FastAPI, HTTPException, BackgroundTasks
+from transformers import AutoProcessor, AutoModelForImageTextToText
 from contextlib import asynccontextmanager
-from functools import partial, cache
+import torch
+from govdocs_api.utilities.pdf_utilities import render_pdf_to_base64png, total_pages
 import time
 from typing import List, Dict, Any, Optional, Tuple
-
-from olmocr.prompts import PageResponse, build_finetuning_prompt
-from olmocr.prompts.anchor import get_anchor_text
-
+import base64
+from io import BytesIO
+from PIL import Image
+import gc
 from govdocs_api.supabase.db_functions import supabase
 import io
 
 
 model = None
-processor = None
-
-#,cache_dir="/local/home/hfurquan/myProjects/Leaderboard/cache"
+processor = None 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global model
-    global processor
-    model = Qwen2VLForConditionalGeneration.from_pretrained(
-        "allenai/olmOCR-7B-0225-preview", 
-        torch_dtype=torch.bfloat16
-    ).eval()
-    processor = AutoProcessor.from_pretrained("Qwen/Qwen2-VL-7B-Instruct")
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model.to(device)
+  global model
+  global processor
+  processor = AutoProcessor.from_pretrained("reducto/RolmOCR")
+  model = AutoModelForImageTextToText.from_pretrained("reducto/RolmOCR")
+  torch.device("cuda" if torch.cuda.is_available() else "cpu")
+  model.to(device)
 
-    print("OLM OCR model loaded ✅")
-    
-    yield
+  print("RolmOCR model loaded ✅")
 
-    
-    del model
-    del processor
-    torch.cuda.empty_cache()
-    gc.collect()
+  yield
 
-olm_ocr = APIRouter(lifespan=lifespan)
+  del model
+  del processor
+  torch.cuda.empty_cache()
+  gc.collect()
 
+rolmocr = APIRouter(lifespan=lifespan)
 
 def process_page(page_num, barcode, temperature, dpi, max_new_tokens, num_return_sequences, device):
     """Process a single page and return the OCR text with performance metrics."""
@@ -75,7 +62,7 @@ def process_page(page_num, barcode, temperature, dpi, max_new_tokens, num_return
     render_end = time.perf_counter()
     perf_metrics["download_time"] = render_end - render_start
 
-    prompt = "Following is a scanned government document page. Return the text content of the page."
+    prompt = "Return the plain text representation of this document as if you were reading it naturally.\n"
     
     # Build the full prompt
     prep_start = time.perf_counter()
@@ -83,8 +70,8 @@ def process_page(page_num, barcode, temperature, dpi, max_new_tokens, num_return
         {
             "role": "user",
             "content": [
-                {"type": "text", "text": prompt},
                 {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_base64}"}},
+                {"type": "text", "text": prompt},
             ],
         }
     ]
@@ -138,10 +125,10 @@ def process_page(page_num, barcode, temperature, dpi, max_new_tokens, num_return
         "performance": perf_metrics
     }
 
-@olm_ocr.get("/olmocr")
-def olm(barcode: str, last_page: int, first_page: int = 1, temprature: float = 0.9, dpi:int = 256, max_new_tokens: int = 5000, num_return_sequences: int = 1):
+@rolmocr.get("/olmocr")
+def _rolmocr(barcode: str, last_page: int, first_page: int = 1, temprature: float = 0.9, dpi:int = 256, max_new_tokens: int = 5000, num_return_sequences: int = 1):
     """
-    Perform OCR on a specific page of the given PDF using olmOCR.
+    Perform OCR on a specific page of the given PDF using rolmOCR.
     
     Args:
         barcode: Barcode identifier for the document
