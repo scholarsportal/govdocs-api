@@ -4,7 +4,6 @@
 
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.103.1-009688.svg)](https://fastapi.tiangolo.com)
-[![Poetry](https://img.shields.io/badge/Poetry-1.6.1-4B8BBE.svg)](https://python-poetry.org/)
 
 ## 🔍 Project Description
 
@@ -25,7 +24,7 @@ The API supports the following OCR engines:
 
 ### Prerequisites
 
-- Python 3.11 or later
+- Python 3.11 or later with pip and venv
 - Git
 - GPU recommended for some OCR models
 
@@ -45,15 +44,7 @@ cd govdocs-api
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y \
-    poppler-utils \
-    tesseract-ocr \
-    ttf-mscorefonts-installer \
-    msttcorefonts \
-    fonts-crosextra-caladea \
-    fonts-crosextra-carlito \
-    gsfonts \
-    lcdf-typetools
+sudo apt-get install -y poppler-utils tesseract-ocr
 ```
 
 </details>
@@ -81,38 +72,12 @@ brew install poppler tesseract
 
 </details>
 
-#### Step 3: Install Poetry
-
-Poetry is used for dependency management and packaging in Python.
-
-<details>
-<summary>📋 Linux, macOS, Windows (WSL)</summary>
-
-```bash
-curl -sSL https://install.python-poetry.org | python3 -
-```
-
-</details>
-
-<details>
-<summary>🪟 Windows (PowerShell)</summary>
-
-```powershell
-(Invoke-WebRequest -Uri https://install.python-poetry.org -UseBasicParsing).Content | py -
-```
-
-If you installed Python through the Microsoft Store, use `python` instead of `py`.
-</details>
-
-Make sure Poetry is in your PATH:
-
-- Unix: `$HOME/.local/bin`
-- Windows: `%APPDATA%\Python\Scripts`
-
 #### Step 4: Install project dependencies
 
 ```bash
-poetry install
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
 ```
 
 ### ⚙️ Configuration
@@ -134,16 +99,16 @@ cp .env.example .env
 
 #### Local Development
 
-Includes change tracking.
+Ensure the python virtual environment is activated. Includes change tracking.
 
 ```bash
-poetry run fastapi dev src/govdocs_api/server.py
+fastapi dev src/govdocs_api/server.py
 ```
 
 #### Production
 
 ```bash
-poetry run fastapi run src/govdocs_api/server.py
+fastapi run src/govdocs_api/server.py
 ```
 
 #### Docker
