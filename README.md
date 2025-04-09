@@ -128,6 +128,7 @@ cp .env.example .env
 ```
 
 1. Update your `.env` file with the Supabase API URL and anon key displayed after running `supabase start` from the Supabase project.
+1. Set HF_HOME to download models to a custom path
 
 ### 🚀 Running the API
 

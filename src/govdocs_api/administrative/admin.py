@@ -22,9 +22,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("uvicorn.error")
 
 # # Initialize Supabase client
 # supabase_url = os.environ.get("SUPABASE_URL")

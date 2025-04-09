@@ -11,7 +11,7 @@ services:
       - HF_HOME=/app/models
     volumes:
       - ./models:/app/models 
-    network_mode: host
+    network_mode: host # required to reach supabase on localhost
     # deploy:
     #   resources:
     #     reservations:

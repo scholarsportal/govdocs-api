@@ -23,5 +23,8 @@ env/
 venv/
 
 
-#Personal poetry configs
+# Personal poetry configs
 poetry.toml
+
+# Model cache
+models/*

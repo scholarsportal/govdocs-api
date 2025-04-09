@@ -19,6 +19,7 @@
     "healthz",
     "huggingface",
     "ipykernel",
+    "levelname",
     "OCUL",
     "olmocr",
     "opencv",

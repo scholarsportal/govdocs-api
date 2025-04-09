@@ -40,7 +40,4 @@ RUN poetry config virtualenvs.create false
 RUN poetry install --no-interaction --no-ansi
 
 # During debugging, this entry point will be overridden. For more information, please refer to https://aka.ms/vscode-docker-python-debug
-#CMD ["gunicorn", "--bind", "0.0.0.0:8000", "-k", "uvicorn.workers.UvicornWorker", "src.govdocs_api.server:app"]
-#CMD ["uvicorn", "src.govdocs_api.server:app", "--host", "0.0.0.0", "--port", "8000"]
-#CMD [ "poetry", "run", "fastapi", "run", "src/govdocs_api/server.py"]
-CMD [ "poetry", "run", "python", "src/govdocs_api/server.py"]
+CMD [ "poetry", "run", "fastapi", "run", "src/govdocs_api/server.py"]
