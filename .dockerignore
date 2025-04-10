@@ -7,3 +7,13 @@
 **/.vscode
 **/docker-compose*
 **/Dockerfile*
+
+# Environments
+.env
+venv/
+
+# Personal poetry configs
+poetry.toml
+
+# Model cache
+models/*
