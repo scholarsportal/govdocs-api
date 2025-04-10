@@ -88,9 +88,10 @@ def process_page(page_num : int,  barcode: int, target_longest_image_dim: int =1
         },
     ]
     
-    # Prepare inputs
+    # This fixes the `resolution_max_side` cannot be larger than `max_image_size` error
+    custom_size = {"longest_edge": target_longest_image_dim}
     prompt = processor.apply_chat_template(messages, add_generation_prompt=True)
-    inputs = processor(text=prompt, images=[image], return_tensors="pt")
+    inputs = processor(text=prompt, images=[image], return_tensors="pt",images_kwargs={'size': custom_size})
     inputs = inputs.to(DEVICE)
     prep_end = time.perf_counter()
     perf_metrics["preprocessing_time"] = prep_end - prep_start
