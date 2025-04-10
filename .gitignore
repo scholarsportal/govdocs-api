@@ -21,6 +21,7 @@ pip-delete-this-directory.txt
 .venv
 env/
 venv/
+govdocs/
 
 
 # Personal poetry configs

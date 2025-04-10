@@ -76,6 +76,11 @@ brew install poppler tesseract
 
 ```bash
 python -m venv venv
+# In cmd.exe
+venv\Scripts\activate.bat
+# In PowerShell
+venv\Scripts\Activate.ps1
+# In Linux/unix
 source venv/bin/activate
 pip install -r requirements.txt
 ```
