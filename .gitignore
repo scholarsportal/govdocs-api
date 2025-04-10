@@ -21,3 +21,10 @@ pip-delete-this-directory.txt
 .venv
 env/
 venv/
+
+
+# Personal poetry configs
+poetry.toml
+
+# Model cache
+models/*

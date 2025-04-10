@@ -1,38 +1,3 @@
-# For marker OCR
-from marker.converters.pdf import PdfConverter
-from marker.models import create_model_dict
-from marker.output import text_from_rendered
-import os
-
-# Marker OCR implementation
-def marker_ocr(pdf_path, output_dir):
-    output_file = os.path.join(output_dir, 'marker_output.txt')
-    output_md_file = os.path.join(output_dir, 'marker_output.md')
-    os.makedirs(output_dir, exist_ok=True)
-    
-    converter = PdfConverter(
-        artifact_dict=create_model_dict(),
-    )
-    
-    rendered = converter(pdf_path)
-    text,_, images = text_from_rendered(rendered)
-    
-    # Save the markdown text
-    with open(output_md_file, 'w', encoding='utf-8') as f:
-        f.write(text)
-    
-    # Save a plain text version
-    with open(output_file, 'w', encoding='utf-8') as f:
-        f.write(text)
-    
-    # Save images
-    for key, img in images.items():
-        img_path = os.path.join(output_dir, key)
-        img.save(img_path)
-    
-    return text
-
-
 import traceback
 
 import click
@@ -53,6 +18,10 @@ from fastapi import APIRouter, FastAPI, Form, File, HTTPException, UploadFile
 from marker.converters.pdf import PdfConverter
 from marker.models import create_model_dict
 from marker.settings import settings
+from govdocs_api.supabase.db_functions import supabase
+import tempfile
+import img2pdf
+import shutil
 
 app_data = {}
 
@@ -86,9 +55,12 @@ async def root():
 
 
 class CommonParams(BaseModel):
-    filepath: Annotated[
-        Optional[str], Field(description="The path to the PDF file to convert.")
+    barcode: Annotated[
+        Optional[int], Field(description="Barcode for the PDF")
     ]
+    filepath: Annotated[
+        Optional[str], Field(description="The filepath for the temporary PDF.")
+    ] = None
     page_range: Annotated[
         Optional[str],
         Field(description="Page range to convert, specify comma separated page numbers or ranges.  Example: 0,5-10,20", example=None)
@@ -113,11 +85,80 @@ class CommonParams(BaseModel):
         str,
         Field(description="The format to output the text in.  Can be 'markdown', 'json', or 'html'.  Defaults to 'markdown'.")
     ] = "markdown"
+    llm_service: Annotated[
+        str,
+        Field(description="The LLM service to use for parsing ocr")
+    ] = "marker.services.claude.ClaudeService"
 
 
 async def _convert_pdf(params: CommonParams) -> HTMLResponse: 
     assert params.output_format in ["markdown", "json", "html"], "Invalid output format"
+
+    claude_api_key=os.getenv("CLAUDE_API_KEY")
+    claude_model=os.getenv("CLAUDE_MODEL")
+    
+    # Parse the page_range string to get all page numbers
+    page_numbers = []
+    # When constructing page numbers, translate from user-provided numbers to 0-indexed
+    if params.page_range:
+        parts = params.page_range.split(',')
+        for part in parts:
+            if '-' in part:
+                # Handle range like "1-5"
+                start, end = map(int, part.split('-'))
+    
+                page_numbers.extend(range(start, end))
+            else:
+                # Handle individual page like "1"
+                try:
+                    page_numbers.append(int(part)) 
+                except ValueError:
+                    raise HTTPException(status_code=400, detail=f"Invalid page number in page range: {part}")
+
+    # Sort the page numbers
+    page_numbers.sort()
+
+    # Create a temporary directory for the downloaded images
+    temp_dir = tempfile.mkdtemp()
+    print(f"Created temporary directory: {temp_dir}")
+
+    # Disable tokenizers parallelism to avoid warnings
+    os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
+    # Download each page and save to the temp directory
+    image_paths = []
+    for page_num in page_numbers:
+        try:
+            # Download image from Supabase Storage
+            response = (
+                supabase.storage
+                .from_("ia_bucket")
+                .download(f"{params.barcode}/{page_num}.png")
+            )
+
+            print(f"Downloaded image for barcode {params.barcode}, page {page_num}")
+
+            # Save the image to a file in the temp directory
+            image_path = os.path.join(temp_dir, f"{page_num}.png")
+            with open(image_path, "wb") as f:
+                f.write(response)
+            
+            image_paths.append(image_path)
+            print(f"Saved image to {image_path}")
+        except Exception as e:
+            raise HTTPException(status_code=404, detail=f"Could not find image for barcode {params.barcode}, page {page_num}: {str(e)}")
+
+    # For PDF converter, we need to convert images to a single PDF
+    pdf_path = os.path.join(temp_dir, f"{params.barcode}.pdf")
     try:
+        with open(pdf_path, "wb") as f:
+            f.write(img2pdf.convert(image_paths))
+        params.filepath = pdf_path
+        print(f"Created PDF at {pdf_path}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create PDF: {str(e)}")
+    try:
+        params.page_range = None
         options = params.model_dump()
         print(options)
         config_parser = ConfigParser(options)
@@ -140,6 +181,9 @@ async def _convert_pdf(params: CommonParams) -> HTMLResponse:
             "success": False,
             "error": str(e),
         }
+    finally:
+        if os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir)
 
     encoded = {}
     for k, v in images.items():
@@ -147,38 +191,34 @@ async def _convert_pdf(params: CommonParams) -> HTMLResponse:
         v.save(byte_stream, format=settings.OUTPUT_IMAGE_FORMAT)
         encoded[k] = base64.b64encode(byte_stream.getvalue()).decode(settings.OUTPUT_ENCODING)
 
-    # return {
-    #     "format": params.output_format,
-    #     "output": text,
-    #     "images": encoded,
-    #     "metadata": metadata,
-    #     "success": True,
-    # }
     return text
 
 @marker.get("/marker")
 async def convert_pdf(
-    filepath: str,
+    #filepath: str,
+    barcode: int,
     page_range: str,
     languages: Optional[str] = None,
     force_ocr: bool = False,
     paginate_output: bool = False,
     output_format: str = "html"
 ): 
-    try:
-        script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        pdf_path = os.path.join(script_dir, "pdfs", filepath)
-        #images = [render_pdf_to_base64png(local_pdf_path=pdf_path, page_num=page_number, target_longest_image_dim=1024)]
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Error rendering PDF: " + str(e) )
+    # try:
+    #     script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    #     pdf_path = os.path.join(script_dir, "pdfs", filepath)
+    #     #images = [render_pdf_to_base64png(local_pdf_path=pdf_path, page_num=page_number, target_longest_image_dim=1024)]
+    # except Exception as e:
+    #     raise HTTPException(status_code=500, detail="Error rendering PDF: " + str(e) )
 
     params = CommonParams(
-        filepath=pdf_path,
+        #filepath=pdf_path,
+        barcode = barcode,
         page_range=page_range,
         languages=languages,
         force_ocr=force_ocr,
         paginate_output=paginate_output,
-        output_format=output_format
+        output_format=output_format,
+        llm_service="marker.services.claude.ClaudeService"
     )
     return await _convert_pdf(params)
 
@@ -206,7 +246,7 @@ async def convert_pdf_upload(
         languages=languages,
         force_ocr=force_ocr,
         paginate_output=paginate_output,
-        output_format=output_format,
+        output_format=output_format
     )
     results = await _convert_pdf(params)
     os.remove(upload_path)

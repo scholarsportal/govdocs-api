@@ -1,122 +1,144 @@
-# GovDocs API
+# 📚 GovDocs API
 
-The backend API for the OCUL Government Documents AIML project.
+> The backend API for evaluating OCR performance on government documents.
 
-## Project description
+[![Python 3.11+](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.103.1-009688.svg)](https://fastapi.tiangolo.com)
 
-The API will provide the ability to run and evaluate these OCR services:
+## 🔍 Project Description
 
-* [GOT_OCR2.0](https://github.com/Ucas-HaoranWei/GOT-OCR2.0) (outputs HTML with a custom JS converter)
-* [olmOCR](https://github.com/allenai/olmocr) ([Dolma](https://github.com/allenai/dolma)-style JSONL, uses dolmaviewer)
-* [Marker OCR](https://github.com/VikParuchuri/marker) (Markdown)
-* [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) (Plain text)
+GovDocs API is an evaluation platform for various OCR (Optical Character Recognition) services specialized for government documents. This project provides a unified interface to compare the performance, accuracy, and output formats of different OCR technologies through a simple API.
 
-## Run the project
+## ✨ Features
 
-This project requires Python 3.10 or later to run. You need to clone the project, install poetry, and then install dependencies before running the project:
+The API supports the following OCR engines:
+
+| OCR Service | Output Formats | Description |
+|-------------|----------------|-------------|
+| 🧠 [olmOCR](https://github.com/allenai/olmocr) | Plain Text | AI-powered OCR by Allen AI |
+| 📝 [Marker OCR](https://github.com/VikParuchuri/marker) | HTML, Markdown, JSON | Advanced document layout-preserving OCR |
+| 🔤 [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) | Plain text | Open-source OCR engine |
+| 📄 [Docling OCR](https://huggingface.co/ds4sd/SmolDocling-256M-preview) | Markdown | Structure-preserving document OCR |
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+- Python 3.11 or later with pip and venv
+- Git
+- GPU recommended for some OCR models
+
+### 📦 Installation
+
+#### Step 1: Clone the repository
 
 ```bash
 git clone https://github.com/scholarsportal/govdocs-api.git
 cd govdocs-api
 ```
 
-### Run locally
+#### Step 2: Install system dependencies
 
-#### Install dependencies 
+<details>
+<summary>📋 Ubuntu/Debian</summary>
 
-Ubuntu/Debian:
 ```bash
 sudo apt-get update
-sudo apt-get install poppler-utils ttf-mscorefonts-installer msttcorefonts fonts-crosextra-caladea fonts-crosextra-carlito gsfonts lcdf-typetools
-```
-Windows:
-
-Download the poppler windows poppler-windows package instead: 
-
-https://github.com/oschwartz10612/poppler-windows/releases/tag/v24.08.0-0 
-
-1. Download the Release-24.08.0-0.zip file.
-2. extract the file at C:\poppler\
-
-#### Install poetry 
-
-Poetry is a tool for dependency management and packaging in Python.
-
-Follow installation instructions at: https://python-poetry.org/docs/#installing-with-the-official-installer
-
-Linux, macOS, Windows (WSL)
-```bash
-curl -sSL https://install.python-poetry.org | python3 -
-```
-Windows (Powershell)
-```bash
-(Invoke-WebRequest -Uri https://install.python-poetry.org -UseBasicParsing).Content | py -
-
-```
-If you have installed Python through the Microsoft Store, replace py with python in the command above.
-
-*Add Poetry to your PATH*
-
-The installer creates a poetry wrapper in a well-known, platform-specific directory:
-
-- $HOME/.local/bin on Unix.
-- %APPDATA%\Python\Scripts on Windows.
-- $POETRY_HOME/bin if $POETRY_HOME is set.
-
-If this directory is not present in your $PATH, you can add it in order to invoke Poetry as poetry.
-
-Alternatively, the full path to the poetry binary can always be used:
-
-- ~/Library/Application Support/pypoetry/venv/bin/poetry on macOS.
-- ~/.local/share/pypoetry/venv/bin/poetry on Linux/Unix.
-- %APPDATA%\pypoetry\venv\Scripts\poetry on Windows.
-- $POETRY_HOME/venv/bin/poetry if $POETRY_HOME is set.
-
-## Install Tesseract-OCR package
-
-Windows: 
-
-follow instructions at https://github.com/UB-Mannheim/tesseract/wiki
-
-Ubunutu/Linux: 
-
-```
-sudo apt install tesseract-ocr
+sudo apt-get install -y poppler-utils tesseract-ocr
 ```
 
-## Setup enviornment variables & Initialize Supabase
+</details>
 
-1. Copy the .env.example file to a new .env file.
+<details>
+<summary>🪟 Windows</summary>
 
-2. Install the supabase cli following these instructions: [Supabase CLI install](https://supabase.com/docs/guides/local-development/cli/getting-started)
+1. **Install Poppler**:
+   - Download [Release-24.08.0-0.zip](https://github.com/oschwartz10612/poppler-windows/releases/tag/v24.08.0-0)
+   - Extract to `C:\poppler\`
+   - Add `C:\poppler\bin` to your system PATH
 
-3. From the project directory run:
+2. **Install Tesseract OCR**:
+   - Follow instructions at [UB-Mannheim/tesseract](https://github.com/UB-Mannheim/tesseract/wiki)
+   - Add Tesseract to your system PATH
+
+</details>
+
+<details>
+<summary>🍎 macOS</summary>
 
 ```bash
-supabase start
+brew install poppler tesseract
 ```
 
-This will setup a local supabase instance on your machine. Copy the `API URL` and `anon key` and paste it in the .env file you created.
+</details>
 
-### Install required packages
-
-Install the required packages:
+#### Step 4: Install project dependencies
 
 ```bash
-poetry install
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
 ```
 
-Run the server:
+### ⚙️ Configuration
+
+1. Set up Supabase:
+
+Ensure Supabase is up and running as described in the Supabase project [here](https://gitlab.scholarsportal.info/ai-ml/supabase).
+
+1. Create a `.env` file from the example:
 
 ```bash
-poetry run fastapi dev src/govdocs_api/server.py # run the api server in development mode
-poetry run fastapi run src/govdocs_api/server.py # run the api server in production mode
+cp .env.example .env
 ```
 
-### Run with Docker
+1. Update your `.env` file with the Supabase API URL and anon key displayed after running `supabase start` from the Supabase project.
+1. Set HF_HOME to download models to a custom path
+
+### 🚀 Running the API
+
+#### Local Development
+
+Ensure the python virtual environment is activated. Includes change tracking.
+
+```bash
+fastapi dev src/govdocs_api/server.py
+```
+
+#### Production
+
+```bash
+fastapi run src/govdocs_api/server.py
+```
+
+#### Docker
 
 ```bash
 docker compose up
 ```
 
-The API will be available on <http://localhost:8000>
+The API will be available at [http://localhost:8000](http://localhost:8000)
+
+## 📖 API Documentation
+
+Once the server is running, access the interactive API documentation at:
+
+- Swagger UI: [http://localhost:8000/docs](http://localhost:8000/docs)
+- ReDoc: [http://localhost:8000/redoc](http://localhost:8000/redoc)
+
+## 🔄 API Endpoints
+
+The API provides the following endpoints:
+
+- `/marker` - Process documents using Marker OCR
+- `/olmocr` - Process documents using olmOCR
+- `/smoldocling` - Process documents using Docling OCR
+- `/tesseract` - Process documents using Tesseract OCR
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## 📄 License
+
+This project is licensed under the MIT License - see the LICENSE file for details.

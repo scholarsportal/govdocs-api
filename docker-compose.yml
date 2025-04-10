@@ -8,23 +8,15 @@ services:
     env_file:
       - .env
     environment:
-      - PYTHONUNBUFFERED=1
-      - PYTHONDEVMODE=1  # Enables additional debugging information
       - HF_HOME=/app/models
-      - SUPABASE_URL=http://host.internal.docker:54321
-      - SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-    # network_mode: host
     volumes:
-      - ./src/govdocs_api:/app/src/govdocs_api
-      - models:/app/models 
-#    runtime: nvidia -> Install nvidia-container toolkit to run models on GPU
-
-volumes:
-  models:
+      - ./models:/app/models 
+    network_mode: host # required to reach supabase on localhost
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+    # runtime: nvidia -> Install nvidia-container toolkit to run models on GPU
