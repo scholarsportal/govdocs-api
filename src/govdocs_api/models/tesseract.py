@@ -30,28 +30,32 @@ def remove_bleed_through(image):
     smoothed = cv2.medianBlur(denoised, 1)
     return smoothed
 
-def ocr_page(image_tuple : tuple[Image.Image, int], dpi: int) -> dict:
+def ocr_page(image_tuple : tuple[Image.Image, int], dpi: int, contrast: int) -> dict:
     image, page_num = image_tuple
-    # adjust exposure
-    if CONTRAST != 1.0:
-        brightness_enhancer = ImageEnhance.Brightness(image)
-        brightened_image = brightness_enhancer.enhance(CONTRAST)
-        contrast_enhancer = ImageEnhance.Contrast(brightened_image)
-        contrasted_image = contrast_enhancer.enhance(CONTRAST)
-    else:
-        contrasted_image = image
-    # remove noise
-    denoised_image = remove_bleed_through(np.array(contrasted_image))
-    processed_image = Image.fromarray(denoised_image)
-    #processed_image.save(f'./{dpi}.png')
-    print(f'Performing tesseract OCR with DPI: {dpi}')
-    processed_image.info['dpi'] = (dpi, dpi)
-    ocr_text = pytesseract.image_to_string(processed_image, lang=LANG, config=f"--dpi {dpi}")
+
+    # Setting the contrast parameter to 0 will disable the image preprocessor
+    if contrast == 0:
+        ocr_text = pytesseract.image_to_string(image, lang=LANG, config=f"--dpi {dpi}")
+    else:    
+        # adjust exposure
+        if contrast != 1.0:
+            brightness_enhancer = ImageEnhance.Brightness(image)
+            brightened_image = brightness_enhancer.enhance(contrast)
+            contrast_enhancer = ImageEnhance.Contrast(brightened_image)
+            contrasted_image = contrast_enhancer.enhance(contrast)
+        else:
+            contrasted_image = image
+        # remove noise
+        denoised_image = remove_bleed_through(np.array(contrasted_image))
+        processed_image = Image.fromarray(denoised_image)
+        processed_image.info['dpi'] = (dpi, dpi)
+        ocr_text = pytesseract.image_to_string(processed_image, lang=LANG, config=f"--dpi {dpi}")
+
     return {"text": ocr_text, "page_number": page_num}
 
 
 @tesseract.get("/tesseract")
-async def tesseract_ocr_page(barcode: str, dpi: int = 256, first_page: int = 1, last_page: int = None) -> JSONResponse:
+async def tesseract_ocr_page(barcode: str, dpi: int = 256, first_page: int = 1, last_page: int = None, contrast : int = 1.0) -> JSONResponse:
     """
     Perform OCR on specific pages of images stored in Supabase using Tesseract.
     
@@ -65,9 +69,8 @@ async def tesseract_ocr_page(barcode: str, dpi: int = 256, first_page: int = 1, 
         JSON response with OCR'd text for the specified page(s)
     """
     
-    # Update the global DPI setting
-    global DPI
-    DPI = dpi
+    if contrast < 0.7 or contrast > 1.3:
+         raise HTTPException(status_code=400, detail="Contrast must be within the range 0.7 and 1.3")
     
     # Input validation
     if last_page is not None and last_page < first_page:
@@ -98,7 +101,7 @@ async def tesseract_ocr_page(barcode: str, dpi: int = 256, first_page: int = 1, 
                 raise HTTPException(status_code=404, detail=f"Could not find image for barcode {barcode}, page {page_num}: {str(e)}")
         
         # Perform OCR on the downloaded images
-        ocr_with_dpi = partial(ocr_page, dpi=dpi)
+        ocr_with_dpi = partial(ocr_page, dpi=dpi, contrast=contrast)
         with ProcessPoolExecutor(max_workers=MAX_WORKERS) as executor:
             ocr_texts = list(executor.map(ocr_with_dpi, page_images_with_numbers))
         
