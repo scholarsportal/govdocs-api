@@ -80,7 +80,9 @@ python -m venv venv
 venv\Scripts\activate.bat
 # In PowerShell
 venv\Scripts\Activate.ps1
-# In Linux/unix
+# In Linux/unix (tcsh or csh)
+source govdocs/bin/activate.csh
+# bash or zsh
 source venv/bin/activate
 pip install -r requirements.txt
 ```

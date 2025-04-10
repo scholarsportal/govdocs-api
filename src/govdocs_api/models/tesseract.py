@@ -69,7 +69,7 @@ async def tesseract_ocr_page(barcode: str, dpi: int = 256, first_page: int = 1, 
         JSON response with OCR'd text for the specified page(s)
     """
     
-    if contrast < 0.7 or contrast > 1.3:
+    if (contrast < 0.7 or contrast > 1.3) and contrast != 0:
          raise HTTPException(status_code=400, detail="Contrast must be within the range 0.7 and 1.3")
     
     # Input validation
