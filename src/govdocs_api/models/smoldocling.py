@@ -16,6 +16,7 @@ import json
 from typing import List, Dict, Any, Optional
 from functools import partial
 import concurrent.futures
+import traceback
 from govdocs_api.utilities.pdf_utilities import render_pdf_to_base64png, total_pages
 from govdocs_api.supabase.db_functions import supabase, create_ocr_request, update_ocr_request_status, get_document_by_barcode, create_ocr_job
 import io
@@ -145,10 +146,12 @@ async def process_smoldocling_request(request_id: int, document_id: str, barcode
         last_page = min(last_page, first_page + max_pages - 1)
         pages_to_process = range(first_page, last_page + 1)
         
+        print(f"Processing SmolDocling OCR for {len(pages_to_process)} pages, request ID: {request_id}")
+        
         # Process pages
         results = []
         
-        # Use ThreadPoolExecutor for parallel processing
+        # Use ThreadPoolExecutor for parallel processing with better error handling
         with concurrent.futures.ThreadPoolExecutor(max_workers=min(3, len(pages_to_process))) as executor:
             # Create a partial function with fixed parameters
             process_func = partial(
@@ -187,8 +190,9 @@ async def process_smoldocling_request(request_id: int, document_id: str, barcode
                     )
                     
                 except Exception as e:
-                    print(f"Error processing page {page_num}: {str(e)}")
-                    error_message = f"Error processing page {page_num}: {str(e)}"
+                    error_msg = f"Error processing page {page_num}: {str(e)}"
+                    print(error_msg)
+                    traceback.print_exc()
                     
                     # Save error to database
                     await create_ocr_job(
@@ -196,7 +200,7 @@ async def process_smoldocling_request(request_id: int, document_id: str, barcode
                         document_id=document_id,
                         page_number=page_num,
                         ocr_output=json.dumps({
-                            "markdown": error_message,
+                            "markdown": f"Error processing page {page_num}: {str(e)}",
                             "raw_doctags": ""
                         }),
                         ocr_model="smoldocling",
@@ -209,21 +213,28 @@ async def process_smoldocling_request(request_id: int, document_id: str, barcode
                     
                     results.append({
                         "page_number": page_num,
-                        "markdown": error_message,
+                        "markdown": error_msg,
                         "raw_doctags": "",
                         "performance": {"error": str(e)}
                     })
         
         # Combine all markdown into one document with page markers
-        combined_markdown = ""
-        for result in sorted(results, key=lambda x: x["page_number"]):
-            combined_markdown += f"\n\n## Page {result['page_number']}\n\n{result['markdown']}"
-        
-        # Update request status to completed
-        await update_ocr_request_status(request_id, "completed")
+        if results:
+            combined_markdown = ""
+            for result in sorted(results, key=lambda x: x["page_number"]):
+                combined_markdown += f"\n\n## Page {result['page_number']}\n\n{result['markdown']}"
+            
+            print(f"SmolDocling OCR request {request_id} completed successfully")
+            # Update request status to completed
+            await update_ocr_request_status(request_id, "completed")
+        else:
+            print(f"No pages were successfully processed for request {request_id}")
+            await update_ocr_request_status(request_id, "error")
         
     except Exception as e:
-        print(f"Error processing SmolDocling request {request_id}: {str(e)}")
+        error_msg = f"Error processing SmolDocling request {request_id}: {str(e)}"
+        print(error_msg)
+        traceback.print_exc()
         # Update request status to error
         await update_ocr_request_status(request_id, "error")
 

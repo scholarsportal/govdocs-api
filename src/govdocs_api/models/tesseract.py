@@ -1,4 +1,4 @@
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse
 from govdocs_api.utilities.types import TesseactOCRRequest
@@ -13,6 +13,7 @@ import io
 from govdocs_api.supabase.db_functions import supabase, create_ocr_request, update_ocr_request_status, get_document_by_barcode, create_ocr_job
 from functools import partial
 from typing import Dict, Any, List, Optional
+import traceback
 
 tesseract = APIRouter()
 
@@ -29,28 +30,33 @@ def remove_bleed_through(image):
     smoothed = cv2.medianBlur(denoised, 1)
     return smoothed
 
-def ocr_page(image_tuple : tuple[Image.Image, int], dpi: int, contrast: int) -> dict:
-    image, page_num = image_tuple
+def ocr_page(image_tuple : tuple[Image.Image, int], dpi: int, contrast: float) -> dict:
+    """Process a single page and return the OCR text."""
+    try:
+        image, page_num = image_tuple
 
-    # Setting the contrast parameter to 0 will disable the image preprocessor
-    if contrast == 0:
-        ocr_text = pytesseract.image_to_string(image, lang=LANG, config=f"--dpi {dpi}")
-    else:    
-        # adjust exposure
-        if contrast != 1.0:
-            brightness_enhancer = ImageEnhance.Brightness(image)
-            brightened_image = brightness_enhancer.enhance(contrast)
-            contrast_enhancer = ImageEnhance.Contrast(brightened_image)
-            contrasted_image = contrast_enhancer.enhance(contrast)
-        else:
-            contrasted_image = image
-        # remove noise
-        denoised_image = remove_bleed_through(np.array(contrasted_image))
-        processed_image = Image.fromarray(denoised_image)
-        processed_image.info['dpi'] = (dpi, dpi)
-        ocr_text = pytesseract.image_to_string(processed_image, lang=LANG, config=f"--dpi {dpi}")
+        # Setting the contrast parameter to 0 will disable the image preprocessor
+        if contrast == 0:
+            ocr_text = pytesseract.image_to_string(image, lang=LANG, config=f"--dpi {dpi}")
+        else:    
+            # adjust exposure
+            if contrast != 1.0:
+                brightness_enhancer = ImageEnhance.Brightness(image)
+                brightened_image = brightness_enhancer.enhance(contrast)
+                contrast_enhancer = ImageEnhance.Contrast(brightened_image)
+                contrasted_image = contrast_enhancer.enhance(contrast)
+            else:
+                contrasted_image = image
+            # remove noise
+            denoised_image = remove_bleed_through(np.array(contrasted_image))
+            processed_image = Image.fromarray(denoised_image)
+            processed_image.info['dpi'] = (dpi, dpi)
+            ocr_text = pytesseract.image_to_string(processed_image, lang=LANG, config=f"--dpi {dpi}")
 
-    return {"text": ocr_text, "page_number": page_num}
+        return {"text": ocr_text, "page_number": page_num}
+    except Exception as e:
+        print(f"Error in OCR for page {page_num}: {str(e)}")
+        return {"text": f"Error: {str(e)}", "page_number": page_num, "error": True}
 
 async def process_ocr_request(request_id: int, document_id: str, barcode: str, 
                              first_page: int, last_page: int, dpi: int, contrast: float):
@@ -58,6 +64,8 @@ async def process_ocr_request(request_id: int, document_id: str, barcode: str,
     Process OCR in the background and save results to the database.
     """
     try:
+        print(f"Performing OCR on {last_page - first_page + 1} pages for barcode {barcode}")
+        
         # Process each page in the range
         page_images_with_numbers = []
         for page_num in range(first_page, last_page + 1):
@@ -88,29 +96,56 @@ async def process_ocr_request(request_id: int, document_id: str, barcode: str,
                 )
                 continue
         
+        if not page_images_with_numbers:
+            print(f"No images could be downloaded for barcode {barcode}")
+            await update_ocr_request_status(request_id, "error")
+            return
+        
         # Perform OCR on the downloaded images
         ocr_config = {"dpi": dpi, "contrast": contrast}
         ocr_with_dpi = partial(ocr_page, dpi=dpi, contrast=contrast)
         
-        with ProcessPoolExecutor(max_workers=MAX_WORKERS) as executor:
-            ocr_texts = list(executor.map(ocr_with_dpi, page_images_with_numbers))
+        # Use ThreadPoolExecutor instead of ProcessPoolExecutor for better stability
+        ocr_texts = []
+        with ThreadPoolExecutor(max_workers=min(MAX_WORKERS, len(page_images_with_numbers))) as executor:
+            futures = {executor.submit(ocr_with_dpi, image_tuple): image_tuple for image_tuple in page_images_with_numbers}
+            for future in futures:
+                try:
+                    result = future.result()
+                    ocr_texts.append(result)
+                except Exception as e:
+                    image_tuple = futures[future]
+                    page_num = image_tuple[1]
+                    error_msg = f"OCR processing failed for page {page_num}: {str(e)}"
+                    print(error_msg)
+                    traceback.print_exc()
+                    ocr_texts.append({
+                        "text": error_msg,
+                        "page_number": page_num,
+                        "error": True
+                    })
         
         # Save results to database
         for result in ocr_texts:
+            status = "error" if result.get("error", False) else "completed"
             await create_ocr_job(
                 request_id=request_id,
                 document_id=document_id,
                 page_number=result["page_number"],
                 ocr_output=result["text"],
                 ocr_model="tesseract",
-                ocr_config=ocr_config
+                ocr_config=ocr_config,
+                status=status
             )
         
         # Update request status to completed
         await update_ocr_request_status(request_id, "completed")
+        print(f"OCR request {request_id} completed successfully")
         
     except Exception as e:
-        print(f"Error processing OCR request {request_id}: {str(e)}")
+        error_msg = f"Error processing OCR request {request_id}: {str(e)}"
+        print(error_msg)
+        traceback.print_exc()
         # Update request status to error
         await update_ocr_request_status(request_id, "error")
 
@@ -132,7 +167,8 @@ async def tesseract_ocr_page(barcode: str, background_tasks: BackgroundTasks, dp
         JSON response with request ID and status
     """
     
-    if (contrast < 0.7 or contrast > 1.3) and contrast != 0:
+
+    if contrast != 0 and (contrast < 0.7 or contrast > 1.3):
          raise HTTPException(status_code=400, detail="Contrast must be within the range 0.7 and 1.3 or set to 0 to disable preprocessing")
     
     # Input validation

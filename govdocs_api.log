@@ -1,0 +1,34 @@
+INFO 2025-04-13 12:03:43 [uvicorn.error] - Started server process [3176414]
+INFO 2025-04-13 12:03:43 [uvicorn.error] - Waiting for application startup.
+INFO 2025-04-13 12:04:01 [uvicorn.error] - Application startup complete.
+INFO 2025-04-13 12:04:08 [uvicorn.error] - Started server process [3176908]
+INFO 2025-04-13 12:04:08 [uvicorn.error] - Waiting for application startup.
+INFO 2025-04-13 12:04:25 [uvicorn.error] - Application startup complete.
+INFO 2025-04-13 12:04:32 [uvicorn.error] - Started server process [3177364]
+INFO 2025-04-13 12:04:32 [uvicorn.error] - Waiting for application startup.
+INFO 2025-04-13 12:04:47 [uvicorn.error] - Application startup complete.
+INFO 2025-04-13 12:04:52 [uvicorn.error] - Shutting down
+INFO 2025-04-13 12:04:52 [uvicorn.error] - Waiting for application shutdown.
+INFO 2025-04-13 12:04:54 [uvicorn.error] - Application shutdown complete.
+INFO 2025-04-13 12:04:54 [uvicorn.error] - Finished server process [3177364]
+INFO 2025-04-13 12:08:35 [uvicorn.error] - Started server process [3179353]
+INFO 2025-04-13 12:08:35 [uvicorn.error] - Waiting for application startup.
+INFO 2025-04-13 12:08:51 [uvicorn.error] - Application startup complete.
+INFO 2025-04-13 12:11:40 [uvicorn.error] - Shutting down
+INFO 2025-04-13 12:11:40 [uvicorn.error] - Waiting for application shutdown.
+INFO 2025-04-13 12:11:41 [uvicorn.error] - Application shutdown complete.
+INFO 2025-04-13 12:11:41 [uvicorn.error] - Finished server process [3179353]
+INFO 2025-04-13 12:11:49 [uvicorn.error] - Started server process [3180861]
+INFO 2025-04-13 12:11:49 [uvicorn.error] - Waiting for application startup.
+INFO 2025-04-13 12:12:06 [uvicorn.error] - Application startup complete.
+INFO 2025-04-13 12:14:30 [uvicorn.error] - Shutting down
+INFO 2025-04-13 12:14:30 [uvicorn.error] - Waiting for application shutdown.
+INFO 2025-04-13 12:14:31 [uvicorn.error] - Application shutdown complete.
+INFO 2025-04-13 12:14:31 [uvicorn.error] - Finished server process [3180861]
+INFO 2025-04-13 12:14:39 [uvicorn.error] - Started server process [3182256]
+INFO 2025-04-13 12:14:39 [uvicorn.error] - Waiting for application startup.
+INFO 2025-04-13 12:14:54 [uvicorn.error] - Application startup complete.
+INFO 2025-04-13 12:18:16 [uvicorn.error] - Shutting down
+INFO 2025-04-13 12:18:16 [uvicorn.error] - Waiting for application shutdown.
+INFO 2025-04-13 12:18:18 [uvicorn.error] - Application shutdown complete.
+INFO 2025-04-13 12:18:18 [uvicorn.error] - Finished server process [3182256]
