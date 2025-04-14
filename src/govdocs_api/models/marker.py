@@ -209,7 +209,7 @@ async def _convert_pdf(params: CommonParams) -> Dict[str, Any]:
 
 @run_in_thread
 def process_marker_request_thread(request_id: int, document_id: str, barcode: int, page_range: str, 
-                                 languages: Optional[str], force_ocr: bool, paginate_output: bool, 
+                                 languages: str, force_ocr: bool, paginate_output: bool, 
                                  output_format: str, llm_service: str):
     """
     Process Marker OCR in a separate thread and save results to the database.
@@ -224,7 +224,8 @@ def process_marker_request_thread(request_id: int, document_id: str, barcode: in
         loop.run_until_complete(
             _process_marker_request(
                 request_id, document_id, barcode, page_range,
-                languages, force_ocr, paginate_output, output_format, llm_service
+                force_ocr, paginate_output, llm_service,
+                languages, output_format
             )
         )
     except Exception as e:
@@ -240,8 +241,8 @@ def process_marker_request_thread(request_id: int, document_id: str, barcode: in
             del active_requests[request_id]
 
 async def _process_marker_request(request_id: int, document_id: str, barcode: int, page_range: str, 
-                               languages: Optional[str], force_ocr: bool, paginate_output: bool, 
-                               output_format: str, llm_service: str):
+                               force_ocr: bool, paginate_output: bool, llm_service: str,
+                               languages: str = 'eng', output_format: str = 'markdown'):
     """
     Process Marker OCR in the background and save results to the database.
     This is the actual processing function that runs inside the thread.
@@ -318,18 +319,20 @@ async def _process_marker_request(request_id: int, document_id: str, barcode: in
 @marker.get("/marker")
 async def convert_pdf(
     barcode: int,
-    page_range: str,
-    languages: Optional[str] = None,
+    first_page: int = 1, 
+    last_page: int = None,
     force_ocr: bool = False,
     paginate_output: bool = False,
-    output_format: str = "html"
+    languages: str = "en",
+    output_format: str = "markdown"
 ): 
     """
     Perform OCR on specified pages using Marker.
     
     Args:
         barcode: Barcode identifier for the document
-        page_range: Page range to process in format like "1-5,7,9-11"
+        first_page: First Page number to OCR (1-based index), if None will default to first page
+        last_page: Last Page number to OCR (1-based index), if None will process all pages
         languages: Optional languages to use for OCR
         force_ocr: Whether to force OCR on all pages
         paginate_output: Whether to paginate the output
@@ -345,6 +348,26 @@ async def convert_pdf(
             raise HTTPException(status_code=404, detail=f"Document with barcode {barcode} not found")
         
         document_id = document["id"]
+        
+        # Get document page count if first_page or last_page is not specified
+        if first_page is None or last_page is None:
+            total_page_count = await get_document_page_count(str(barcode))
+            if total_page_count == 0:
+                raise HTTPException(status_code=404, detail=f"No pages found for document with barcode {barcode}")
+            
+            # Set default values if not specified
+            if first_page is None:
+                first_page = 1
+            if last_page is None:
+                last_page = total_page_count
+        
+        # Input validation
+        if last_page < first_page:
+            raise HTTPException(status_code=400, detail="Last page number must be greater than or equal to first page number.")
+            
+        # Create page range string in format "1-5"
+        page_range = f"{first_page}-{last_page}"
+        
         ocr_config = {
             "languages": languages,
             "force_ocr": force_ocr,

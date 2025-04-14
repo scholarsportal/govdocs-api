@@ -277,9 +277,9 @@ async def _process_smoldocling_request(request_id: int, document_id: str, barcod
 @smoldocling.get("/smoldocling")
 async def smoldocling_ocr(
     barcode: str, 
-    last_page: int, 
-    first_page: int = 1, 
-    max_pages: int = 3,
+    first_page: int = 1,
+    last_page: int = None,
+    max_pages: int = 50,
     target_image_dim: int = 1024, 
     max_new_tokens: int = 8192
 ):
@@ -288,19 +288,15 @@ async def smoldocling_ocr(
     
     Args:
         barcode: Barcode identifier for the document
-        first_page: First page number to OCR (1-based index)
-        last_page: Last page number to OCR (1-based index)
-        max_pages: Maximum number of pages to process
+        first_page: First page number to OCR (1-based index), if None will default to first page
+        last_page: Last page number to OCR (1-based index), if None will process all pages
+        max_pages: Maximum number of pages to process in a single request
         target_image_dim: Target longest dimension for rendered images
         max_new_tokens: Maximum number of tokens to generate
     
     Returns:
         JSON response with request ID and status
     """
-    # Input validation
-    if last_page < first_page:
-        raise HTTPException(status_code=400, detail="Last page number must be greater than or equal to first page number.")
-    
     try:
         # Get document from database
         document = await get_document_by_barcode(barcode)
@@ -308,6 +304,28 @@ async def smoldocling_ocr(
             raise HTTPException(status_code=404, detail=f"Document with barcode {barcode} not found")
         
         document_id = document["id"]
+        
+        # Get document page count if first_page or last_page is not specified
+        if first_page is None or last_page is None:
+            total_page_count = await get_document_page_count(barcode)
+            if total_page_count == 0:
+                raise HTTPException(status_code=404, detail=f"No pages found for document with barcode {barcode}")
+            
+            # Set default values if not specified
+            if first_page is None:
+                first_page = 1
+            if last_page is None:
+                last_page = total_page_count
+        
+        # Input validation
+        if last_page < first_page:
+            raise HTTPException(status_code=400, detail="Last page number must be greater than or equal to first page number.")
+        
+        # Limit the number of pages to process to avoid overloading the system
+        if last_page - first_page + 1 > max_pages:
+            print(f"Limiting request from {last_page - first_page + 1} to {max_pages} pages")
+            last_page = first_page + max_pages - 1
+        
         page_range = f"{first_page}-{last_page}"
         ocr_config = {
             "target_image_dim": target_image_dim,

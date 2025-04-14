@@ -203,8 +203,8 @@ async def tesseract_ocr_page(barcode: str, dpi: int = 256,
     
     Args:
         barcode: Barcode identifier for the document
-        first_page: First Page number to OCR (1-based index)
-        last_page: Last Page number to OCR (1-based index)
+        first_page: First Page number to OCR (1-based index), if None will default to first page
+        last_page: Last Page number to OCR (1-based index), if None will process all pages
         dpi: DPI setting for OCR processing
         contrast: Contrast adjustment (0 to disable preprocessing)
     
@@ -215,14 +215,6 @@ async def tesseract_ocr_page(barcode: str, dpi: int = 256,
     if (contrast < 0.7 or contrast > 1.3) and contrast != 0:
          raise HTTPException(status_code=400, detail="Contrast must be within the range 0.7 and 1.3 or set to 0 to disable preprocessing")
     
-    # Input validation
-    if last_page is not None and last_page < first_page:
-        raise HTTPException(status_code=400, detail="Last page number must be greater than or equal to first page number.")
-    
-    # If last_page is not specified, just process the first_page
-    if last_page is None:
-        last_page = first_page
-    
     try:
         # Get document from database
         document = await get_document_by_barcode(barcode)
@@ -230,6 +222,23 @@ async def tesseract_ocr_page(barcode: str, dpi: int = 256,
             raise HTTPException(status_code=404, detail=f"Document with barcode {barcode} not found")
         
         document_id = document["id"]
+        
+        # Get document page count if first_page or last_page is not specified
+        if first_page is None or last_page is None:
+            total_page_count = await get_document_page_count(barcode)
+            if total_page_count == 0:
+                raise HTTPException(status_code=404, detail=f"No pages found for document with barcode {barcode}")
+            
+            # Set default values if not specified
+            if first_page is None:
+                first_page = 1
+            if last_page is None:
+                last_page = total_page_count
+        
+        # Input validation
+        if last_page < first_page:
+            raise HTTPException(status_code=400, detail="Last page number must be greater than or equal to first page number.")
+        
         page_range = f"{first_page}-{last_page}"
         ocr_config = {"dpi": dpi, "contrast": contrast}
         

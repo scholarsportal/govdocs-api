@@ -257,16 +257,17 @@ async def _process_olm_request(request_id: int, document_id: str, barcode: str,
         await update_ocr_request_status(request_id, "error")
 
 @olm_ocr.get("/olmocr")
-async def olm(barcode: str, last_page: int, 
-             first_page: int = 1, temperature: float = 0.9, dpi: int = 256, 
+async def olm(barcode: str, 
+             first_page: int = 1, last_page: int = None,
+             temperature: float = 0.9, dpi: int = 256, 
              max_new_tokens: int = 5000, num_return_sequences: int = 1):
     """
     Perform OCR on a specific page of the given PDF using olmOCR.
     
     Args:
         barcode: Barcode identifier for the document
-        first_page: First Page number to OCR (1-based index)
-        last_page: Last Page number to OCR (1-based index)
+        first_page: First Page number to OCR (1-based index), if None will default to first page
+        last_page: Last Page number to OCR (1-based index), if None will process all pages
         temperature: The value used to control the randomness of the generated text
         dpi: The DPI to use for image rendering
         max_new_tokens: The maximum number of tokens to generate
@@ -275,10 +276,6 @@ async def olm(barcode: str, last_page: int,
     Returns:
         JSON response with request ID and status
     """
-    # Input validation
-    if last_page < first_page:
-        raise HTTPException(status_code=400, detail="Last page number must be greater than or equal to first page number.")
-    
     try:
         # Get document from database
         document = await get_document_by_barcode(barcode)
@@ -286,6 +283,23 @@ async def olm(barcode: str, last_page: int,
             raise HTTPException(status_code=404, detail=f"Document with barcode {barcode} not found")
         
         document_id = document["id"]
+        
+        # Get document page count if first_page or last_page is not specified
+        if first_page is None or last_page is None:
+            total_page_count = await get_document_page_count(barcode)
+            if total_page_count == 0:
+                raise HTTPException(status_code=404, detail=f"No pages found for document with barcode {barcode}")
+            
+            # Set default values if not specified
+            if first_page is None:
+                first_page = 1
+            if last_page is None:
+                last_page = total_page_count
+        
+        # Input validation
+        if last_page < first_page:
+            raise HTTPException(status_code=400, detail="Last page number must be greater than or equal to first page number.")
+        
         page_range = f"{first_page}-{last_page}"
         ocr_config = {
             "temperature": temperature,

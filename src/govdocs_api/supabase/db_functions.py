@@ -17,9 +17,6 @@ async def create_supabase() -> AsyncClient:
         key,
     )
 
-
-
-
 # OCR database functions
 async def create_ocr_request(document_id: str, page_range: str, ocr_model: str, ocr_config: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -74,6 +71,28 @@ async def get_document_by_barcode(barcode: str) -> Dict[str, Any]:
     response = supabase.table("documents").select("*").eq("barcode", barcode).execute()
     
     return response.data[0] if response.data and len(response.data) > 0 else None
+
+async def get_document_page_count(barcode: str) -> int:
+    """
+    Get the total number of pages for a document by checking pages stored in Supabase.
+    
+    Args:
+        barcode: The document barcode
+        
+    Returns:
+        The total number of pages found, or 0 if document not found
+    """
+    try:
+        # List files in the document's folder to count pages
+        response = supabase.storage.from_("ia_bucket").list(barcode)
+        
+        # Count the PNG files (typically named 1.png, 2.png, etc.)
+        page_count = sum(1 for item in response if item['name'].lower().endswith('.png'))
+        
+        return page_count
+    except Exception as e:
+        print(f"Error getting page count for document {barcode}: {str(e)}")
+        return 0
 
 async def create_ocr_job(request_id: int, document_id: str, page_number: int, 
                          ocr_output: str, ocr_model: str, ocr_config: Dict[str, Any], 
