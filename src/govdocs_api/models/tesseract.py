@@ -16,6 +16,7 @@ from typing import Dict, Any, List, Optional
 import traceback
 import asyncio
 import threading
+import concurrent.futures
 
 # Create a dictionary to store active processing threads
 active_requests = {}
