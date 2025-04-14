@@ -17,14 +17,33 @@ from typing import List, Dict, Any, Optional
 from functools import partial
 import concurrent.futures
 import traceback
+import asyncio
+import threading
 from govdocs_api.utilities.pdf_utilities import render_pdf_to_base64png, total_pages
 from govdocs_api.supabase.db_functions import supabase, create_ocr_request, update_ocr_request_status, get_document_by_barcode, create_ocr_job
 import io
+import logging
+from supabase import AsyncClient
+
+logger = logging.getLogger("background_tasks")
+logger.setLevel(logging.INFO)
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 processor = None
 model = None
+
+# Create a dictionary to store active processing threads
+active_requests = {}
+
+def run_in_thread(target_function):
+    """Decorator to run a function in a separate thread."""
+    def run(*args, **kwargs):
+        t = threading.Thread(target=target_function, args=args, kwargs=kwargs)
+        t.daemon = True  # Daemonize thread to allow program to exit
+        t.start()
+        return t
+    return run
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -47,18 +66,13 @@ async def lifespan(app: FastAPI):
 
 smoldocling = APIRouter(lifespan=lifespan)
 
-def process_page(page_num : int,  barcode: int, target_longest_image_dim: int =1024, max_new_tokens : int =8192):
+def process_page(page_num: int, barcode: int, target_longest_image_dim: int = 1024, max_new_tokens: int = 8192):
     """Process a single page and return the markdown text with performance metrics."""
     perf_metrics = {}
     total_start = time.perf_counter()
 
-    #print(f"Rendering page_num: {page_num} of {pdf_path}")
-    
-    # Render page to an image
+    # Download the image for the page
     render_start = time.perf_counter()
-    # image_base64 = render_pdf_to_base64png(pdf_path, page_num, target_longest_image_dim=target_longest_image_dim)
-    # image_bytes = base64.b64decode(image_base64)
-    # image = Image.open(BytesIO(image_bytes))
     try:
         # Download image from Supabase Storage
         response = (
@@ -72,7 +86,8 @@ def process_page(page_num : int,  barcode: int, target_longest_image_dim: int =1
         # Convert response to PIL Image
         image = Image.open(io.BytesIO(response))
     except Exception as e:
-        raise HTTPException(status_code=404, detail=f"Could not find image for barcode {barcode}, page {page_num}: {str(e)}")
+        print(f"Error downloading image for barcode {barcode}, page {page_num}: {str(e)}")
+        raise Exception(f"Could not find image for barcode {barcode}, page {page_num}: {str(e)}")
     
     render_end = time.perf_counter()
     perf_metrics["download_time"] = render_end - render_start
@@ -92,7 +107,7 @@ def process_page(page_num : int,  barcode: int, target_longest_image_dim: int =1
     # This fixes the `resolution_max_side` cannot be larger than `max_image_size` error
     custom_size = {"longest_edge": target_longest_image_dim}
     prompt = processor.apply_chat_template(messages, add_generation_prompt=True)
-    inputs = processor(text=prompt, images=[image], return_tensors="pt",images_kwargs={'size': custom_size})
+    inputs = processor(text=prompt, images=[image], return_tensors="pt", images_kwargs={'size': custom_size})
     inputs = inputs.to(DEVICE)
     prep_end = time.perf_counter()
     perf_metrics["preprocessing_time"] = prep_end - prep_start
@@ -134,98 +149,119 @@ def process_page(page_num : int,  barcode: int, target_longest_image_dim: int =1
         "performance": perf_metrics
     }
 
-async def process_smoldocling_request(request_id: int, document_id: str, barcode: str, 
+@run_in_thread
+def process_smoldocling_request_thread(request_id: int, document_id: str, barcode: str, 
+                                      first_page: int, last_page: int, 
+                                      target_image_dim: int, max_new_tokens: int,
+                                      max_pages: int):
+    """
+    Process SmolDocling OCR in a separate thread and save results to the database.
+    This function runs in its own thread to avoid blocking the FastAPI event loop.
+    """
+    try:
+        # Create a new event loop for this thread
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        # Run the async processing function in this thread's event loop
+        loop.run_until_complete(
+            _process_smoldocling_request(
+                request_id, document_id, barcode, first_page, last_page,
+                target_image_dim, max_new_tokens, max_pages
+            )
+        )
+    except Exception as e:
+        print(f"Thread error processing SmolDocling request {request_id}: {str(e)}")
+        traceback.print_exc()
+        # We need to run the status update in the thread's event loop
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(update_ocr_request_status(request_id, "error"))
+    finally:
+        # Clean up
+        if request_id in active_requests:
+            del active_requests[request_id]
+
+async def _process_smoldocling_request(request_id: int, document_id: str, barcode: str, 
                                      first_page: int, last_page: int, 
                                      target_image_dim: int, max_new_tokens: int,
                                      max_pages: int):
     """
-    Process SmolDocling OCR in the background and save results to the database.
+    Process SmolDocling OCR and save results to the database.
+    This is the actual processing function that runs inside the thread.
     """
     try:
         # Adjust page range
         last_page = min(last_page, first_page + max_pages - 1)
-        pages_to_process = range(first_page, last_page + 1)
+        pages_to_process = list(range(first_page, last_page + 1))
         
         print(f"Processing SmolDocling OCR for {len(pages_to_process)} pages, request ID: {request_id}")
         
-        # Process pages
+        # Process pages sequentially within the async function to avoid complex nested concurrency
         results = []
-        
-        # Use ThreadPoolExecutor for parallel processing with better error handling
-        with concurrent.futures.ThreadPoolExecutor(max_workers=min(3, len(pages_to_process))) as executor:
-            # Create a partial function with fixed parameters
-            process_func = partial(
-                process_page,
-                barcode=barcode,
-                target_longest_image_dim=target_image_dim,
-                max_new_tokens=max_new_tokens
-            )
-            
-            # Process selected pages in parallel
-            future_to_page = {executor.submit(process_func, page_num): page_num for page_num in pages_to_process}
-            
-            for future in concurrent.futures.as_completed(future_to_page):
-                page_num = future_to_page[future]
-                try:
-                    result = future.result()
-                    results.append(result)
-                    print(f"Page {page_num} processed successfully")
-                    
-                    # Save result to database
-                    ocr_config = {
+        for page_num in pages_to_process:
+            try:
+                # Process this page
+                result = process_page(
+                    page_num=page_num,
+                    barcode=barcode,
+                    target_longest_image_dim=target_image_dim,
+                    max_new_tokens=max_new_tokens
+                )
+                
+                results.append(result)
+                print(f"Page {page_num} processed successfully")
+                
+                # Save result to database
+                ocr_config = {
+                    "target_image_dim": target_image_dim,
+                    "max_new_tokens": max_new_tokens
+                }
+                
+                await create_ocr_job(
+                    request_id=request_id,
+                    document_id=document_id,
+                    page_number=page_num,
+                    ocr_output=json.dumps({
+                        "markdown": result["markdown"],
+                        "raw_doctags": result["raw_doctags"]
+                    }),
+                    ocr_model="smoldocling",
+                    ocr_config=ocr_config
+                )
+                
+            except Exception as e:
+                error_msg = f"Error processing page {page_num}: {str(e)}"
+                print(error_msg)
+                traceback.print_exc()
+                
+                # Save error to database
+                await create_ocr_job(
+                    request_id=request_id,
+                    document_id=document_id,
+                    page_number=page_num,
+                    ocr_output=json.dumps({
+                        "markdown": f"Error processing page {page_num}: {str(e)}",
+                        "raw_doctags": ""
+                    }),
+                    ocr_model="smoldocling",
+                    ocr_config={
                         "target_image_dim": target_image_dim,
                         "max_new_tokens": max_new_tokens
-                    }
-                    
-                    await create_ocr_job(
-                        request_id=request_id,
-                        document_id=document_id,
-                        page_number=page_num,
-                        ocr_output=json.dumps({
-                            "markdown": result["markdown"],
-                            "raw_doctags": result["raw_doctags"]
-                        }),
-                        ocr_model="smoldocling",
-                        ocr_config=ocr_config
-                    )
-                    
-                except Exception as e:
-                    error_msg = f"Error processing page {page_num}: {str(e)}"
-                    print(error_msg)
-                    traceback.print_exc()
-                    
-                    # Save error to database
-                    await create_ocr_job(
-                        request_id=request_id,
-                        document_id=document_id,
-                        page_number=page_num,
-                        ocr_output=json.dumps({
-                            "markdown": f"Error processing page {page_num}: {str(e)}",
-                            "raw_doctags": ""
-                        }),
-                        ocr_model="smoldocling",
-                        ocr_config={
-                            "target_image_dim": target_image_dim,
-                            "max_new_tokens": max_new_tokens
-                        },
-                        status="error"
-                    )
-                    
-                    results.append({
-                        "page_number": page_num,
-                        "markdown": error_msg,
-                        "raw_doctags": "",
-                        "performance": {"error": str(e)}
-                    })
+                    },
+                    status="error"
+                )
+                
+                results.append({
+                    "page_number": page_num,
+                    "markdown": error_msg,
+                    "raw_doctags": "",
+                    "performance": {"error": str(e)}
+                })
         
-        # Combine all markdown into one document with page markers
+        # Update request status to completed if any results were produced
         if results:
-            combined_markdown = ""
-            for result in sorted(results, key=lambda x: x["page_number"]):
-                combined_markdown += f"\n\n## Page {result['page_number']}\n\n{result['markdown']}"
-            
-            print(f"SmolDocling OCR request {request_id} completed successfully")
-            # Update request status to completed
+            print(f"SmolDocling OCR request {request_id} completed successfully with {len(results)} pages")
             await update_ocr_request_status(request_id, "completed")
         else:
             print(f"No pages were successfully processed for request {request_id}")
@@ -239,9 +275,8 @@ async def process_smoldocling_request(request_id: int, document_id: str, barcode
         await update_ocr_request_status(request_id, "error")
 
 @smoldocling.get("/smoldocling")
-def smoldocling_ocr(
+async def smoldocling_ocr(
     barcode: str, 
-    background_tasks: BackgroundTasks,
     last_page: int, 
     first_page: int = 1, 
     max_pages: int = 3,
@@ -268,7 +303,7 @@ def smoldocling_ocr(
     
     try:
         # Get document from database
-        document = get_document_by_barcode(barcode)
+        document = await get_document_by_barcode(barcode)
         if not document:
             raise HTTPException(status_code=404, detail=f"Document with barcode {barcode} not found")
         
@@ -281,7 +316,7 @@ def smoldocling_ocr(
         }
         
         # Create request record
-        request_record = create_ocr_request(
+        request_record = await create_ocr_request(
             document_id=document_id,
             page_range=page_range,
             ocr_model="smoldocling",
@@ -293,9 +328,8 @@ def smoldocling_ocr(
         
         request_id = request_record["id"]
         
-        # Add task to background jobs
-        background_tasks.add_task(
-            process_smoldocling_request,
+        # Start processing in a separate thread
+        thread = process_smoldocling_request_thread(
             request_id=request_id,
             document_id=document_id,
             barcode=barcode,
@@ -305,6 +339,9 @@ def smoldocling_ocr(
             max_new_tokens=max_new_tokens,
             max_pages=max_pages
         )
+        
+        # Store the thread reference
+        active_requests[request_id] = thread
         
         return {
             "message": "SmolDocling OCR processing started",
@@ -385,7 +422,8 @@ async def smoldocling_result(request_id: int):
             }
         
         # Get jobs from database
-        jobs = supabase.table("ocr_jobs").select("*").eq("request_id", request_id).order("page_number", {"ascending": True}).execute()
+        #jobs = supabase.table("ocr_jobs").select("*").eq("request_id", request_id).order("page_number", {"ascending": True}).execute()
+        jobs = supabase.table("ocr_jobs").select("*").eq("request_id", request_id).order("page_number", desc=False).execute()
         
         if not jobs.data:
             raise HTTPException(status_code=404, detail=f"No OCR jobs found for request ID {request_id}")
@@ -444,7 +482,7 @@ def smoldocling_image_ocr(
     # Load image
     image_load_start = time.perf_counter()
     try:
-        if image_url.startswith('data:image'):
+        if (image_url.startswith('data:image')):
             # Handle data URL
             image_data = image_url.split(',', 1)[1]
             image_bytes = base64.b64decode(image_data)

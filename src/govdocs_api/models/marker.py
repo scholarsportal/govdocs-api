@@ -10,6 +10,8 @@ from contextlib import asynccontextmanager
 from typing import Optional, Annotated, Dict, Any, List
 import io
 import json
+import asyncio
+import threading
 from fastapi import APIRouter, FastAPI, Form, File, HTTPException, UploadFile, BackgroundTasks
 from marker.converters.pdf import PdfConverter
 from marker.models import create_model_dict
@@ -21,6 +23,17 @@ import shutil
 
 app_data = {}
 
+# Create a dictionary to store active processing threads
+active_requests = {}
+
+def run_in_thread(target_function):
+    """Decorator to run a function in a separate thread."""
+    def run(*args, **kwargs):
+        t = threading.Thread(target=target_function, args=args, kwargs=kwargs)
+        t.daemon = True  # Daemonize thread to allow program to exit
+        t.start()
+        return t
+    return run
 
 UPLOAD_DIRECTORY = "./uploads"
 os.makedirs(UPLOAD_DIRECTORY, exist_ok=True)
@@ -194,11 +207,44 @@ async def _convert_pdf(params: CommonParams) -> Dict[str, Any]:
         "images": encoded,
     }
 
-async def process_marker_request(request_id: int, document_id: str, barcode: int, page_range: str, 
+@run_in_thread
+def process_marker_request_thread(request_id: int, document_id: str, barcode: int, page_range: str, 
+                                 languages: Optional[str], force_ocr: bool, paginate_output: bool, 
+                                 output_format: str, llm_service: str):
+    """
+    Process Marker OCR in a separate thread and save results to the database.
+    This function runs in its own thread to avoid blocking the FastAPI event loop.
+    """
+    try:
+        # Create a new event loop for this thread
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        # Run the async processing function in this thread's event loop
+        loop.run_until_complete(
+            _process_marker_request(
+                request_id, document_id, barcode, page_range,
+                languages, force_ocr, paginate_output, output_format, llm_service
+            )
+        )
+    except Exception as e:
+        print(f"Thread error processing Marker OCR request {request_id}: {str(e)}")
+        traceback.print_exc()
+        # We need to run the status update in the thread's event loop
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(update_ocr_request_status(request_id, "error"))
+    finally:
+        # Clean up
+        if request_id in active_requests:
+            del active_requests[request_id]
+
+async def _process_marker_request(request_id: int, document_id: str, barcode: int, page_range: str, 
                                languages: Optional[str], force_ocr: bool, paginate_output: bool, 
                                output_format: str, llm_service: str):
     """
     Process Marker OCR in the background and save results to the database.
+    This is the actual processing function that runs inside the thread.
     """
     try:
         params = CommonParams(
@@ -260,16 +306,18 @@ async def process_marker_request(request_id: int, document_id: str, barcode: int
         
         # Update request status to completed
         await update_ocr_request_status(request_id, "completed")
+        print(f"Marker OCR request {request_id} completed successfully")
         
     except Exception as e:
-        print(f"Error processing Marker OCR request {request_id}: {str(e)}")
+        error_msg = f"Error processing Marker OCR request {request_id}: {str(e)}"
+        print(error_msg)
+        traceback.print_exc()
         # Update request status to error
         await update_ocr_request_status(request_id, "error")
 
 @marker.get("/marker")
 async def convert_pdf(
     barcode: int,
-    background_tasks: BackgroundTasks,
     page_range: str,
     languages: Optional[str] = None,
     force_ocr: bool = False,
@@ -318,9 +366,8 @@ async def convert_pdf(
         
         request_id = request_record["id"]
         
-        # Add task to background jobs
-        background_tasks.add_task(
-            process_marker_request,
+        # Start processing in a separate thread instead of using BackgroundTasks
+        thread = process_marker_request_thread(
             request_id=request_id,
             document_id=document_id,
             barcode=barcode,
@@ -331,6 +378,9 @@ async def convert_pdf(
             output_format=output_format,
             llm_service="marker.services.claude.ClaudeService"
         )
+        
+        # Store the thread reference
+        active_requests[request_id] = thread
         
         return {
             "message": "Marker OCR processing started",
@@ -411,7 +461,8 @@ async def marker_result(request_id: int):
             }
         
         # Get jobs from database
-        jobs = supabase.table("ocr_jobs").select("*").eq("request_id", request_id).order("page_number", {"ascending": True}).execute()
+        #jobs = supabase.table("ocr_jobs").select("*").eq("request_id", request_id).order("page_number", {"ascending": True}).execute()
+        jobs = supabase.table("ocr_jobs").select("*").eq("request_id", request_id).order("page_number", desc=False).execute()
         
         if not jobs.data:
             raise HTTPException(status_code=404, detail=f"No OCR jobs found for request ID {request_id}")

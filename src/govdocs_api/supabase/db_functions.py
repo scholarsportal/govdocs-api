@@ -1,5 +1,5 @@
 import os
-from supabase import create_client, Client
+from supabase import create_client, Client, acreate_client,  AsyncClient
 from dotenv import load_dotenv
 from typing import Dict, List, Any, Optional
 import json
@@ -10,6 +10,15 @@ url: str = os.environ.get("SUPABASE_URL")
 key: str = os.environ.get("SUPABASE_ANON_KEY")
 print(f'\nSupabase URL: {url}\nSupabase Key: {key}')
 supabase: Client = create_client(url, key)
+
+async def create_supabase() -> AsyncClient:
+    return await acreate_client(
+        url,
+        key,
+    )
+
+
+
 
 # OCR database functions
 async def create_ocr_request(document_id: str, page_range: str, ocr_model: str, ocr_config: Dict[str, Any]) -> Dict[str, Any]:

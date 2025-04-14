@@ -14,6 +14,20 @@ from govdocs_api.supabase.db_functions import supabase, create_ocr_request, upda
 from functools import partial
 from typing import Dict, Any, List, Optional
 import traceback
+import asyncio
+import threading
+
+# Create a dictionary to store active processing threads
+active_requests = {}
+
+def run_in_thread(target_function):
+    """Decorator to run a function in a separate thread."""
+    def run(*args, **kwargs):
+        t = threading.Thread(target=target_function, args=args, kwargs=kwargs)
+        t.daemon = True  # Daemonize thread to allow program to exit
+        t.start()
+        return t
+    return run
 
 tesseract = APIRouter()
 
@@ -58,7 +72,37 @@ def ocr_page(image_tuple : tuple[Image.Image, int], dpi: int, contrast: float) -
         print(f"Error in OCR for page {page_num}: {str(e)}")
         return {"text": f"Error: {str(e)}", "page_number": page_num, "error": True}
 
-async def process_ocr_request(request_id: int, document_id: str, barcode: str, 
+@run_in_thread
+def process_tesseract_request_thread(request_id: int, document_id: str, barcode: str, 
+                                   first_page: int, last_page: int, dpi: int, contrast: float):
+    """
+    Process Tesseract OCR in a separate thread and save results to the database.
+    This function runs in its own thread to avoid blocking the FastAPI event loop.
+    """
+    try:
+        # Create a new event loop for this thread
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        # Run the async processing function in this thread's event loop
+        loop.run_until_complete(
+            _process_ocr_request(
+                request_id, document_id, barcode, first_page, last_page, dpi, contrast
+            )
+        )
+    except Exception as e:
+        print(f"Thread error processing Tesseract OCR request {request_id}: {str(e)}")
+        traceback.print_exc()
+        # We need to run the status update in the thread's event loop
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(update_ocr_request_status(request_id, "error"))
+    finally:
+        # Clean up
+        if request_id in active_requests:
+            del active_requests[request_id]
+
+async def _process_ocr_request(request_id: int, document_id: str, barcode: str, 
                              first_page: int, last_page: int, dpi: int, contrast: float):
     """
     Process OCR in the background and save results to the database.
@@ -105,11 +149,11 @@ async def process_ocr_request(request_id: int, document_id: str, barcode: str,
         ocr_config = {"dpi": dpi, "contrast": contrast}
         ocr_with_dpi = partial(ocr_page, dpi=dpi, contrast=contrast)
         
-        # Use ThreadPoolExecutor instead of ProcessPoolExecutor for better stability
+        # Use ThreadPoolExecutor for better stability
         ocr_texts = []
         with ThreadPoolExecutor(max_workers=min(MAX_WORKERS, len(page_images_with_numbers))) as executor:
             futures = {executor.submit(ocr_with_dpi, image_tuple): image_tuple for image_tuple in page_images_with_numbers}
-            for future in futures:
+            for future in concurrent.futures.as_completed(futures):
                 try:
                     result = future.result()
                     ocr_texts.append(result)
@@ -151,7 +195,7 @@ async def process_ocr_request(request_id: int, document_id: str, barcode: str,
 
 
 @tesseract.get("/tesseract")
-async def tesseract_ocr_page(barcode: str, background_tasks: BackgroundTasks, dpi: int = 256, 
+async def tesseract_ocr_page(barcode: str, dpi: int = 256, 
                             first_page: int = 1, last_page: int = None, contrast : float = 1.0) -> JSONResponse:
     """
     Perform OCR on specific pages of images stored in Supabase using Tesseract.
@@ -167,8 +211,7 @@ async def tesseract_ocr_page(barcode: str, background_tasks: BackgroundTasks, dp
         JSON response with request ID and status
     """
     
-
-    if contrast != 0 and (contrast < 0.7 or contrast > 1.3):
+    if (contrast < 0.7 or contrast > 1.3) and contrast != 0:
          raise HTTPException(status_code=400, detail="Contrast must be within the range 0.7 and 1.3 or set to 0 to disable preprocessing")
     
     # Input validation
@@ -202,9 +245,8 @@ async def tesseract_ocr_page(barcode: str, background_tasks: BackgroundTasks, dp
         
         request_id = request_record["id"]
         
-        # Add task to background jobs
-        background_tasks.add_task(
-            process_ocr_request,
+        # Start processing in a separate thread instead of using BackgroundTasks
+        thread = process_tesseract_request_thread(
             request_id=request_id,
             document_id=document_id,
             barcode=barcode,
@@ -213,6 +255,9 @@ async def tesseract_ocr_page(barcode: str, background_tasks: BackgroundTasks, dp
             dpi=dpi,
             contrast=contrast
         )
+        
+        # Store the thread reference
+        active_requests[request_id] = thread
         
         return JSONResponse(content={
             "message": "OCR processing started",
@@ -226,41 +271,6 @@ async def tesseract_ocr_page(barcode: str, background_tasks: BackgroundTasks, dp
         raise e
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing OCR: {str(e)}")
-
-# @tesseract.get("/tesseract")
-# async def tesseract_ocr_page(pdf_path: str, dpi : int = 256, first_page: int = 1, last_page: int = None) -> JSONResponse:
-#     """
-#     Perform OCR on a specific page of the given PDF using Tesseract.
-    
-#     Args:
-#         pdf_path: Path to the PDF file
-#         first_page: First Page number to OCR (1-based index)
-#         last_page: Last Page number to OCR (1-based index)
-    
-#     Returns:
-#         JSON response with OCR'd text for the specified page(s)
-#     """
-#     try:
-#         script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-#         pdf_path = os.path.join(script_dir, "pdfs", pdf_path)
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail="Error rendering PDF: " + str(e) )
-
-#     if (last_page < first_page):
-#         raise HTTPException(status_code=400, detail="Last page number must be greater than or equal to first page number.")
-    
-#     try:
-#         images = extract_images_from_pdf(filepath=pdf_path, dpi=dpi, first_page=first_page, last_page=last_page)
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail="Error extracting images from PDF: " + str(e) )
-    
-#     # Perform OCR on the pages
-#     with ProcessPoolExecutor(max_workers=MAX_WORKERS) as executor:
-#         ocr_texts = list(executor.map(ocr_page, images))
-    
-#     ocr_texts.sort(key=lambda x: x['page_number'])
-    
-#     return JSONResponse(content=ocr_texts)
 
 @tesseract.get("/tesseract/status/{request_id}")
 async def tesseract_status(request_id: int) -> JSONResponse:
@@ -328,7 +338,8 @@ async def tesseract_result(request_id: int) -> JSONResponse:
             })
         
         # Get jobs from database
-        jobs = supabase.table("ocr_jobs").select("*").eq("request_id", request_id).order("page_number", {"ascending": True}).execute()
+        #jobs = supabase.table("ocr_jobs").select("*").eq("request_id", request_id).order("page_number", {"ascending": True}).execute()
+        jobs = supabase.table("ocr_jobs").select("*").eq("request_id", request_id).order("page_number", desc=False).execute()
         
         if not jobs.data:
             raise HTTPException(status_code=404, detail=f"No OCR jobs found for request ID {request_id}")
