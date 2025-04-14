@@ -12,18 +12,30 @@ from contextlib import asynccontextmanager
 from functools import partial, cache
 import time
 from typing import List, Dict, Any, Optional, Tuple
+import asyncio
+import threading
+import traceback
 
 from olmocr.prompts import PageResponse, build_finetuning_prompt
 from olmocr.prompts.anchor import get_anchor_text
 
-from govdocs_api.supabase.db_functions import supabase
+from govdocs_api.supabase.db_functions import supabase, create_ocr_request, update_ocr_request_status, get_document_by_barcode, create_ocr_job
 import io
 
+# Create a dictionary to store active processing threads
+active_requests = {}
+
+def run_in_thread(target_function):
+    """Decorator to run a function in a separate thread."""
+    def run(*args, **kwargs):
+        t = threading.Thread(target=target_function, args=args, kwargs=kwargs)
+        t.daemon = True  # Daemonize thread to allow program to exit
+        t.start()
+        return t
+    return run
 
 model = None
 processor = None
-
-#,cache_dir="/local/home/hfurquan/myProjects/Leaderboard/cache"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -71,7 +83,7 @@ def process_page(page_num, barcode, temperature, dpi, max_new_tokens, num_return
         # Convert response bytes to base64
         image_base64 = base64.b64encode(response).decode('utf-8')
     except Exception as e:
-        raise HTTPException(status_code=404, detail=f"Could not find image for barcode {barcode}, page {page_num}: {str(e)}")
+        raise Exception(f"Could not find image for barcode {barcode}, page {page_num}: {str(e)}")
     render_end = time.perf_counter()
     perf_metrics["download_time"] = render_end - render_start
 
@@ -138,8 +150,116 @@ def process_page(page_num, barcode, temperature, dpi, max_new_tokens, num_return
         "performance": perf_metrics
     }
 
+@run_in_thread
+def process_olm_request_thread(request_id: int, document_id: str, barcode: str, 
+                              first_page: int, last_page: int, temperature: float, 
+                              dpi: int, max_new_tokens: int, num_return_sequences: int):
+    """
+    Process OLM OCR in a separate thread and save results to the database.
+    This function runs in its own thread to avoid blocking the FastAPI event loop.
+    """
+    try:
+        # Create a new event loop for this thread
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        # Run the async processing function in this thread's event loop
+        loop.run_until_complete(
+            _process_olm_request(
+                request_id, document_id, barcode, first_page, last_page,
+                temperature, dpi, max_new_tokens, num_return_sequences
+            )
+        )
+    except Exception as e:
+        print(f"Thread error processing OLM OCR request {request_id}: {str(e)}")
+        traceback.print_exc()
+        # We need to run the status update in the thread's event loop
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(update_ocr_request_status(request_id, "error"))
+    finally:
+        # Clean up
+        if request_id in active_requests:
+            del active_requests[request_id]
+
+async def _process_olm_request(request_id: int, document_id: str, barcode: str, 
+                            first_page: int, last_page: int, temperature: float, 
+                            dpi: int, max_new_tokens: int, num_return_sequences: int):
+    """
+    Process OLM OCR in the background and save results to the database.
+    """
+    try:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        
+        # Process each page in the requested range
+        output = []
+        
+        for page in range(first_page, last_page + 1):
+            try:
+                page_result = process_page(
+                    page_num=page,
+                    barcode=barcode,
+                    temperature=temperature,
+                    dpi=dpi,
+                    max_new_tokens=max_new_tokens,
+                    num_return_sequences=num_return_sequences,
+                    device=device
+                )
+                
+                output.append(page_result)
+                print(f"Page {page} processed successfully")
+                
+                # Save result to database
+                ocr_config = {
+                    "temperature": temperature,
+                    "dpi": dpi,
+                    "max_new_tokens": max_new_tokens,
+                    "num_return_sequences": num_return_sequences
+                }
+                
+                await create_ocr_job(
+                    request_id=request_id,
+                    document_id=document_id,
+                    page_number=page,
+                    ocr_output=page_result["text"],
+                    ocr_model="olmocr",
+                    ocr_config=ocr_config
+                )
+                
+            except Exception as e:
+                print(f"Error processing page {page}: {str(e)}")
+                traceback.print_exc()
+                
+                # Save error to database
+                await create_ocr_job(
+                    request_id=request_id,
+                    document_id=document_id,
+                    page_number=page,
+                    ocr_output=f"Error: {str(e)}",
+                    ocr_model="olmocr",
+                    ocr_config={
+                        "temperature": temperature,
+                        "dpi": dpi,
+                        "max_new_tokens": max_new_tokens,
+                        "num_return_sequences": num_return_sequences
+                    },
+                    status="error"
+                )
+        
+        # Update request status to completed
+        await update_ocr_request_status(request_id, "completed")
+        print(f"OLM OCR request {request_id} completed successfully")
+        
+    except Exception as e:
+        print(f"Error processing OLM OCR request {request_id}: {str(e)}")
+        traceback.print_exc()
+        # Update request status to error
+        await update_ocr_request_status(request_id, "error")
+
 @olm_ocr.get("/olmocr")
-def olm(barcode: str, last_page: int, first_page: int = 1, temprature: float = 0.9, dpi:int = 256, max_new_tokens: int = 5000, num_return_sequences: int = 1):
+async def olm(barcode: str, last_page: int, 
+             first_page: int = 1, temperature: float = 0.9, dpi: int = 256, 
+             max_new_tokens: int = 5000, num_return_sequences: int = 1):
     """
     Perform OCR on a specific page of the given PDF using olmOCR.
     
@@ -147,53 +267,162 @@ def olm(barcode: str, last_page: int, first_page: int = 1, temprature: float = 0
         barcode: Barcode identifier for the document
         first_page: First Page number to OCR (1-based index)
         last_page: Last Page number to OCR (1-based index)
-        temprature: The value used to control the randomness of the generated text
+        temperature: The value used to control the randomness of the generated text
+        dpi: The DPI to use for image rendering
         max_new_tokens: The maximum number of tokens to generate
         num_return_sequences: The number of sequences to generate
     
     Returns:
-        JSON response with OCR'd text for the specified page(s)
+        JSON response with request ID and status
     """
-    api_start = time.perf_counter()
+    # Input validation
+    if last_page < first_page:
+        raise HTTPException(status_code=400, detail="Last page number must be greater than or equal to first page number.")
     
-    # Configure processing parameters
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    output = []
+    try:
+        # Get document from database
+        document = await get_document_by_barcode(barcode)
+        if not document:
+            raise HTTPException(status_code=404, detail=f"Document with barcode {barcode} not found")
+        
+        document_id = document["id"]
+        page_range = f"{first_page}-{last_page}"
+        ocr_config = {
+            "temperature": temperature,
+            "dpi": dpi,
+            "max_new_tokens": max_new_tokens,
+            "num_return_sequences": num_return_sequences
+        }
+        
+        # Create request record
+        request_record = await create_ocr_request(
+            document_id=document_id,
+            page_range=page_range,
+            ocr_model="olmocr",
+            ocr_config=ocr_config
+        )
+        
+        if not request_record:
+            raise HTTPException(status_code=500, detail="Failed to create OCR request")
+        
+        request_id = request_record["id"]
+        
+        # Start processing in a separate thread instead of using BackgroundTasks
+        thread = process_olm_request_thread(
+            request_id=request_id,
+            document_id=document_id,
+            barcode=barcode,
+            first_page=first_page,
+            last_page=last_page,
+            temperature=temperature,
+            dpi=dpi,
+            max_new_tokens=max_new_tokens,
+            num_return_sequences=num_return_sequences
+        )
+        
+        # Store the thread reference
+        active_requests[request_id] = thread
+        
+        return {
+            "message": "OLM OCR processing started",
+            "request_id": request_id,
+            "status": "processing",
+            "document_id": document_id,
+            "page_range": page_range
+        }
+        
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing OCR: {str(e)}")
 
-    # Process pages
-    processing_start = time.perf_counter()
-    for page in range(first_page, last_page + 1):  # num_pages
-        page_start = time.perf_counter()
-        output.append(process_page(
-            page_num=page,
-            barcode=barcode, 
-            temperature=temprature, 
-            dpi=dpi, 
-            max_new_tokens=max_new_tokens, 
-            num_return_sequences=num_return_sequences,
-            device=device
-        ))
-        page_end = time.perf_counter()
-        print(f"Page {page+1} processed in {page_end - page_start:.2f}s")
+@olm_ocr.get("/olmocr/status/{request_id}")
+async def olm_status(request_id: int):
+    """
+    Get the status of an OLM OCR request.
     
-    processing_end = time.perf_counter()
+    Args:
+        request_id: ID of the OCR request
+        
+    Returns:
+        JSON response with request status and completed pages
+    """
+    try:
+        # Get request from database
+        request = supabase.table("ocr_requests").select("*").eq("id", request_id).execute()
+        
+        if not request.data or len(request.data) == 0:
+            raise HTTPException(status_code=404, detail=f"OCR request with ID {request_id} not found")
+        
+        request_data = request.data[0]
+        
+        # Get jobs from database
+        jobs = supabase.table("ocr_jobs").select("*").eq("request_id", request_id).execute()
+        jobs_data = jobs.data if jobs.data else []
+        
+        return {
+            "request_id": request_id,
+            "status": request_data["status"],
+            "document_id": request_data["document_id"],
+            "page_range": request_data["page_range"],
+            "completed_pages": len(jobs_data),
+            "jobs": jobs_data
+        }
+        
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting OCR status: {str(e)}")
+
+@olm_ocr.get("/olmocr/result/{request_id}")
+async def olm_result(request_id: int):
+    """
+    Get the results of a completed OLM OCR request.
     
-    # Sort and prepare results
-    output.sort(key=lambda x: x['page_number'])
-    
-    # Calculate overall performance metrics
-    api_end = time.perf_counter()
-    
-    # Add overall performance metrics
-    performance_summary = {
-        "processing_time": processing_end - processing_start,
-        "total_api_time": api_end - api_start,
-        "pages_processed": len(output),
-        "avg_page_processing_time": (processing_end - processing_start) / max(1, len(output))
-    }
-    
-    # Return with performance metrics
-    return {
-        "pages": output,
-        "performance_summary": performance_summary
-    }
+    Args:
+        request_id: ID of the OCR request
+        
+    Returns:
+        JSON response with OCR results
+    """
+    try:
+        # Get request from database
+        request = supabase.table("ocr_requests").select("*").eq("id", request_id).execute()
+        
+        if not request.data or len(request.data) == 0:
+            raise HTTPException(status_code=404, detail=f"OCR request with ID {request_id} not found")
+        
+        request_data = request.data[0]
+        
+        if request_data["status"] != "completed":
+            return {
+                "request_id": request_id,
+                "status": request_data["status"],
+                "message": "OCR processing is not yet complete"
+            }
+        
+        # Get jobs from database
+        #jobs = supabase.table("ocr_jobs").select("*").eq("request_id", request_id).order("page_number", {"ascending": True}).execute()
+        jobs = supabase.table("ocr_jobs").select("*").eq("request_id", request_id).order("page_number", desc=False).execute()
+        
+        if not jobs.data:
+            raise HTTPException(status_code=404, detail=f"No OCR jobs found for request ID {request_id}")
+        
+        # Format results
+        pages = [{"text": job["ocr_output"], "page_number": job["page_number"]} for job in jobs.data]
+        
+        # Calculate overall performance metrics
+        performance_summary = {
+            "pages_processed": len(pages),
+            "status": "completed" 
+        }
+        
+        return {
+            "pages": pages,
+            "performance_summary": performance_summary
+        }
+        
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting OCR results: {str(e)}")

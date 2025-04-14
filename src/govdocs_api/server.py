@@ -6,16 +6,33 @@ from govdocs_api.models.tesseract import tesseract
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI
 import logging
+import sys
 
-# Configure logging to avoid duplicates
+# Configure logging for the entire application
 logger = logging.getLogger("uvicorn.error")
 logger.propagate = False
 logger.setLevel(logging.INFO)
 if not logger.hasHandlers():
-    handler = logging.StreamHandler()
-    handler.setFormatter(logging.Formatter(
+    # Add console handler with formatting
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(logging.Formatter(
         "%(levelname)s %(asctime)s - %(message)s", datefmt="%m-%d %H:%M:%S"))
-    logger.addHandler(handler)
+    logger.addHandler(console_handler)
+    
+    # Add file handler for persistent logging
+    try:
+        file_handler = logging.FileHandler("govdocs_api.log")
+        file_handler.setFormatter(logging.Formatter(
+            "%(levelname)s %(asctime)s [%(name)s] - %(message)s", datefmt="%Y-%m-%d %H:%M:%S"))
+        logger.addHandler(file_handler)
+    except Exception as e:
+        logger.warning(f"Could not set up file logging: {str(e)}")
+
+# Create a logger specific to background tasks
+background_logger = logging.getLogger("background_tasks")
+background_logger.setLevel(logging.INFO)
+for handler in logger.handlers:
+    background_logger.addHandler(handler)
 
 app = FastAPI()
 
@@ -32,3 +49,7 @@ app.include_router(marker)
 app.include_router(olm_ocr)
 app.include_router(smoldocling)
 app.include_router(admin_router)
+
+# Make the loggers available to other modules
+app.state.logger = logger
+app.state.background_logger = background_logger
