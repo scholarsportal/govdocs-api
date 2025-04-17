@@ -23,9 +23,11 @@ env/
 venv/
 govdocs/
 
-
 # Personal poetry configs
 poetry.toml
 
 # Model cache
 models/*
+
+# FastAPI logs
+govdocs_api.log
